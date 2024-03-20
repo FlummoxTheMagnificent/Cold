@@ -10,15 +10,31 @@ func typeof(v interface{}) string {
 	return fmt.Sprintf("%T", v)
 }
 
-func lexer(txt string) [][]any {
+type keyword struct {
+	key string
+}
+
+func lexer(txt string) ([][]any, []int) {
+	var indents []int
+
 	// Split by newlines
 	var split []string
 	var text string
+	indent := 0
 	for _, i := range txt {
 		if string(i) == "\n" {
 			split = append(split, text)
 			text = ""
 		} else {
+			if text == "" {
+				if string(i) == "\t" {
+					indent++
+					continue
+				} else {
+					indents = append(indents, indent)
+					indent = 0
+				}
+			}
 			text += string(i)
 		}
 	}
@@ -36,14 +52,12 @@ func lexer(txt string) [][]any {
 				if typeof(token) == "string" {
 					line = append(line, token)
 					token = nil
-					data = nil
 				} else {
 					if token != nil {
 						line = append(line, token)
-						token = nil
+						token = ""
 						data = nil
 					}
-					token = ""
 				}
 			} else if typeof(token) == "string" {
 				token = token.(string) + char
@@ -54,6 +68,10 @@ func lexer(txt string) [][]any {
 			} else if char == "." {
 				if typeof(token) == "int" {
 					token = float64(token.(int))
+				} else {
+					line = append(line, [2]any{token, "."})
+					token = nil
+					data = nil
 				}
 			} else if num, err := strconv.Atoi(char); err == nil {
 				if typeof(token) == "int" {
@@ -68,21 +86,57 @@ func lexer(txt string) [][]any {
 					}
 					token = num
 				}
+			} else if char == "{" || char == "}" || char == "(" || char == ")" || char == "+" || char == "-" || char == "*" || char == "/" || char == "!" || char == ":" {
+				if token != nil {
+					line = append(line, token)
+					data = nil
+				}
+				token = keyword{char}
+			} else if char == "=" {
+				if typeof(token) == "main.keyword" {
+					key := token.(keyword).key
+					if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" || key == "!" {
+						token = keyword{key + char}
+					} else {
+						line = append(line, token)
+						token = nil
+						line = append(line, keyword{"="})
+					}
+				} else {
+					line = append(line, token)
+					token = keyword{"="}
+				}
+			} else {
+				if token == nil {
+					token = keyword{char}
+				} else {
+					if typeof(token) == "main.keyword" {
+						key := token.(keyword).key
+						if key == "{" || key == "}" || key == "(" || key == ")" || key == "+" || key == "-" || key == "*" || key == "/" || key == "!" || key == ":" {
+							line = append(line, keyword{key})
+							key = ""
+						}
+						token = keyword{key + char}
+					}
+				}
 			}
 		}
+
 		if token != nil {
 			line = append(line, token)
 		}
 		lexed = append(lexed, line)
+		line = nil
 	}
 
-	return lexed
+	return lexed, indents
 }
 
 func main() {
 	file := os.Args[1]
 	contentsByteArray, _ := os.ReadFile(file)
 	contents := string(contentsByteArray)
-	lexed := lexer(contents)
+	lexed, indents := lexer(contents)
 	fmt.Println(lexed)
+	fmt.Println(indents)
 }

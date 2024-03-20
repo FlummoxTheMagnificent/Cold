@@ -32,8 +32,25 @@ func lexer(txt string) [][]any {
 		var data any
 		for _, j := range i {
 			char := string(j)
-			if char == " " {
+			if char == "\"" {
+				if typeof(token) == "string" {
+					line = append(line, token)
+					token = nil
+					data = nil
+				} else {
+					if token != nil {
+						line = append(line, token)
+						token = nil
+						data = nil
+					}
+					token = ""
+				}
+			} else if typeof(token) == "string" {
+				token = token.(string) + char
+			} else if char == " " {
 				line = append(line, token)
+				token = nil
+				data = nil
 			} else if char == "." {
 				if typeof(token) == "int" {
 					token = float64(token.(int))
@@ -53,7 +70,9 @@ func lexer(txt string) [][]any {
 				}
 			}
 		}
-		line = append(line, token)
+		if token != nil {
+			line = append(line, token)
+		}
 		lexed = append(lexed, line)
 	}
 
@@ -66,5 +85,4 @@ func main() {
 	contents := string(contentsByteArray)
 	lexed := lexer(contents)
 	fmt.Println(lexed)
-	fmt.Println(typeof(lexed[0][0]))
 }

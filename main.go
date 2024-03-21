@@ -43,7 +43,7 @@ func lex(txt string) ([][]any, []int) {
 	// Split each line into tokens
 	var lexed [][]any
 	var line []any
-	for _, i := range split {
+	for linenum, i := range split {
 		var token any
 		var data any
 		for _, j := range i {
@@ -69,6 +69,10 @@ func lex(txt string) ([][]any, []int) {
 				if typeof(token) == "int" {
 					token = float64(token.(int))
 				} else {
+					if typeof(token) == "float64" {
+						fmt.Println("Error: unexpected . on line", linenum+1)
+						os.Exit(1)
+					}
 					line = append(line, [2]any{token, "."})
 					token = nil
 					data = nil
@@ -76,7 +80,6 @@ func lex(txt string) ([][]any, []int) {
 			} else if num, err := strconv.Atoi(char); err == nil {
 				if typeof(token) == "int" {
 					token = token.(int)*10 + num
-					data = 10
 				} else if typeof(token) == "float64" {
 					token = token.(float64) + float64(num)/float64(data.(int))
 					data = data.(int) * 10
@@ -85,6 +88,7 @@ func lex(txt string) ([][]any, []int) {
 						line = append(line, token)
 					}
 					token = num
+					data = 10
 				}
 			} else if char == "{" || char == "}" || char == "(" || char == ")" || char == "+" || char == "-" || char == "*" || char == "/" || char == "!" || char == ":" {
 				if token != nil {
@@ -155,7 +159,11 @@ func shuntingyard(tokens []any, line int) []any {
 					fmt.Println("Error: cannot negate", i, "on line", line)
 					os.Exit(1)
 				} else {
-					output = append(output, -i.(int))
+					if typeof(i) == "int" {
+						output = append(output, -i.(int))
+					} else {
+						output = append(output, -i.(float64))
+					}
 				}
 				negate = false
 			} else {
@@ -248,9 +256,96 @@ func parse(program [][]any, _ []int) []any {
 				values = append(values, x)
 			}
 		}
-		lines = append(lines, values)
+		if len(values) == 0 {
+			continue
+		}
+		lines = append(lines, values[0])
 	}
 	return lines
+}
+
+func eval(expr any, line int) any {
+	if typeof(expr) == "string" || typeof(expr) == "float64" || typeof(expr) == "int" {
+		return expr
+	} else if typeof(expr) == "main.expression" {
+		key := expr.(expression)
+		if key.expr == "+" {
+			first := eval(key.first, line)
+			second := eval(key.second, line)
+			if typeof(first) == "int" && typeof(second) == "int" {
+				return first.(int) + second.(int)
+			}
+			if typeof(first) == "float64" && typeof(second) == "float64" {
+				return first.(float64) + second.(float64)
+			}
+			if typeof(first) == "string" && typeof(second) == "string" {
+				return first.(string) + second.(string)
+			}
+			if typeof(first) == "int" && typeof(second) == "float64" {
+				return float64(first.(int)) + second.(float64)
+			}
+			if typeof(first) == "float64" && typeof(second) == "int" {
+				return first.(float64) + float64(second.(int))
+			}
+			fmt.Println("Error: mismatched types", first, "and", second, "( types", typeof(first), "and", typeof(second), ") on line", line)
+			os.Exit(1)
+		}
+		if key.expr == "-" {
+			first := eval(key.first, line)
+			second := eval(key.second, line)
+			if typeof(first) == "int" && typeof(second) == "int" {
+				return first.(int) - second.(int)
+			}
+			if typeof(first) == "float64" && typeof(second) == "float64" {
+				return first.(float64) - second.(float64)
+			}
+			if typeof(first) == "int" && typeof(second) == "float64" {
+				return float64(first.(int)) - second.(float64)
+			}
+			if typeof(first) == "float64" && typeof(second) == "int" {
+				return first.(float64) - float64(second.(int))
+			}
+			fmt.Println("Error: mismatched types", first, "and", second, "for {-} ( types", typeof(first), "and", typeof(second), ") on line", line)
+			os.Exit(1)
+		}
+		if key.expr == "*" {
+			first := eval(key.first, line)
+			second := eval(key.second, line)
+			if typeof(first) == "int" && typeof(second) == "int" {
+				return first.(int) * second.(int)
+			}
+			if typeof(first) == "float64" && typeof(second) == "float64" {
+				return first.(float64) * second.(float64)
+			}
+			if typeof(first) == "int" && typeof(second) == "float64" {
+				return float64(first.(int)) * second.(float64)
+			}
+			if typeof(first) == "float64" && typeof(second) == "int" {
+				return first.(float64) * float64(second.(int))
+			}
+			fmt.Println("Error: mismatched types", first, "and", second, "for {*} ( types", typeof(first), "and", typeof(second), ") on line", line)
+			os.Exit(1)
+		}
+		if key.expr == "/" {
+			first := eval(key.first, line)
+			second := eval(key.second, line)
+			if typeof(first) == "int" && typeof(second) == "int" {
+				return float64(first.(int)) / float64(second.(int))
+			}
+			if typeof(first) == "float64" && typeof(second) == "float64" {
+				return first.(float64) / second.(float64)
+			}
+			if typeof(first) == "int" && typeof(second) == "float64" {
+				return float64(first.(int)) / second.(float64)
+			}
+			if typeof(first) == "float64" && typeof(second) == "int" {
+				return first.(float64) / float64(second.(int))
+			}
+			fmt.Println("Error: mismatched types", first, "and", second, "for {/} ( types", typeof(first), "and", typeof(second), ") on line", line)
+			os.Exit(1)
+		}
+	}
+	return typeof(expr)
 }
 
 func main() {
@@ -258,6 +353,7 @@ func main() {
 	contentsByteArray, _ := os.ReadFile(file)
 	contents := string(contentsByteArray)
 	lexed, indents := lex(contents)
-	fmt.Println(parse(lexed, indents)...)
-	fmt.Println(indents)
+	parsed := parse(lexed, indents)
+	fmt.Println(parsed...)
+	fmt.Println(eval(parsed[0], 0))
 }

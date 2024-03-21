@@ -1,5 +1,1 @@
-cheese=17.384*"banana"
-cheese+=6
-func apple (cheese) {
-	eat(food)
-}
+6 + 2 * (3 / - 4)

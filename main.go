@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 )
 
@@ -10,14 +11,27 @@ func typeof(v interface{}) string {
 	return fmt.Sprintf("%T", v)
 }
 
-type keyword struct {
+type Token struct {
 	key string
+}
+type Expression struct {
+	first  any
+	expr   string
+	second any
+}
+type Function struct {
+	name     string
+	args     []any
+	argcount int
+}
+type Keyword struct {
+	word string
 }
 
 func lex(txt string) ([][]any, []int) {
 	var indents []int
 
-	// Split by newlines
+	// Split by newlines and count indents
 	var split []string
 	var text string
 	indent := 0
@@ -95,32 +109,37 @@ func lex(txt string) ([][]any, []int) {
 					line = append(line, token)
 					data = nil
 				}
-				token = keyword{char}
+				token = Token{char}
 			} else if char == "=" {
-				if typeof(token) == "main.keyword" {
-					key := token.(keyword).key
+				if typeof(token) == "main.Token" {
+					key := token.(Token).key
 					if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" || key == "!" {
-						token = keyword{key + char}
+						token = Token{key + char}
 					} else {
 						line = append(line, token)
 						token = nil
-						line = append(line, keyword{"="})
+						line = append(line, Token{"="})
 					}
 				} else {
 					line = append(line, token)
-					token = keyword{"="}
+					token = Token{"="}
 				}
+			} else if char == "," {
+				line = append(line, token)
+				line = append(line, Token{","})
+				token = nil
+				data = nil
 			} else {
 				if token == nil {
-					token = keyword{char}
+					token = Token{char}
 				} else {
-					if typeof(token) == "main.keyword" {
-						key := token.(keyword).key
+					if typeof(token) == "main.Token" {
+						key := token.(Token).key
 						if key == "{" || key == "}" || key == "(" || key == ")" || key == "+" || key == "-" || key == "*" || key == "/" || key == "!" || key == ":" {
-							line = append(line, keyword{key})
+							line = append(line, Token{key})
 							key = ""
 						}
-						token = keyword{key + char}
+						token = Token{key + char}
 					}
 				}
 			}
@@ -136,19 +155,32 @@ func lex(txt string) ([][]any, []int) {
 	return lexed, indents
 }
 
-type expression struct {
-	first  any
-	expr   string
-	second any
-}
-
-func shuntingyard(tokens []any, line int) []any {
+func format(tokens []any, line int) []any {
+	// Heavily modified shunting yard algorithm
+	// Partially from https://blog.kallisti.net.nz/2008/02/extension-to-the-shunting-yard-algorithm-to-allow-variable-numbers-of-arguments-to-functions/
 	var output []any
 	var queue []any
+	var werevalues []bool
+	var argcount []int
 
 	isexpr := true
 	negate := false
+	var prev string
 	for _, i := range tokens {
+		if prev != "" {
+			if typeof(i) == "main.Token" && i.(Token).key == "(" {
+				queue = append(queue, Function{prev, []any{}, 0})
+				argcount = append(argcount, 0)
+				if len(werevalues) > 0 {
+					werevalues[len(werevalues)-1] = true
+				}
+				werevalues = append(werevalues, false)
+			} else {
+				output = append(output, Keyword{prev})
+				isexpr = false
+			}
+			prev = ""
+		}
 		if typeof(i) == "int" || typeof(i) == "float64" || typeof(i) == "string" {
 			if !(isexpr || (output == nil && queue == nil)) {
 				fmt.Println("Error: unexpected", i, "on line", line)
@@ -170,28 +202,54 @@ func shuntingyard(tokens []any, line int) []any {
 				output = append(output, i)
 			}
 			isexpr = false
-		} else if i.(keyword).key == "," {
-			for len(queue) > 0 && queue[len(queue)-1] != "(" {
+			if len(werevalues) > 0 {
+				werevalues[len(werevalues)-1] = true
+			}
+		} else if i.(Token).key == "," {
+			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "main.Function" || queue[len(queue)-1].(Token).key != "(") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
-		} else if i.(keyword).key == "(" {
+			isexpr = true
+			if len(werevalues) == 0 {
+				fmt.Println("Error: unexpected , on line", line)
+			}
+			if werevalues[len(werevalues)-1] {
+				argcount[len(argcount)-1]++
+				werevalues[len(werevalues)-1] = false
+			}
+		} else if i.(Token).key == "(" {
 			queue = append(queue, i)
-		} else if i.(keyword).key == ")" {
+		} else if i.(Token).key == ")" {
+			if len(queue) == 0 {
+				fmt.Println("Error: missing ( on line", line+1)
+				os.Exit(1)
+			}
 			for {
-				if len(queue) == 1 && queue[0].(keyword).key != "(" {
-					fmt.Println("Error: missing ( on line", line+1)
-					os.Exit(1)
-				} else if queue[len(queue)-1].(keyword).key == "(" {
+				if typeof(queue[len(queue)-1]) != "main.Function" && queue[len(queue)-1].(Token).key == "(" {
 					queue = queue[:len(queue)-1]
 					break
+				} else if len(queue) == 1 {
+					fmt.Println("Error: missing ( on line", line+1)
+					os.Exit(1)
 				}
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
-		} else if i.(keyword).key == "+" || i.(keyword).key == "-" {
+			if typeof(queue[len(queue)-1]) == "main.Function" {
+				f := queue[len(queue)-1].(Function)
+				queue = queue[:len(queue)-1]
+				if werevalues[len(werevalues)-1] {
+					f.argcount = argcount[len(argcount)-1] + 1
+				} else {
+					f.argcount = argcount[len(argcount)-1]
+				}
+				argcount = argcount[:len(argcount)-1]
+				output = append(output, f)
+			}
+		} else if i.(Token).key == "+" || i.(Token).key == "-" {
 			if isexpr {
-				if i.(keyword).key == "-" && !negate {
+				if i.(Token).key == "-" && !negate {
 					negate = true
 					continue
 				} else {
@@ -199,34 +257,33 @@ func shuntingyard(tokens []any, line int) []any {
 					os.Exit(1)
 				}
 			}
-			for len(queue) > 0 && (queue[len(queue)-1].(keyword).key == "*" || queue[len(queue)-1].(keyword).key == "/" || queue[len(queue)-1].(keyword).key == "+" || queue[len(queue)-1].(keyword).key == "-") {
+			for len(queue) > 0 && (queue[len(queue)-1].(Token).key == "*" || queue[len(queue)-1].(Token).key == "/" || queue[len(queue)-1].(Token).key == "+" || queue[len(queue)-1].(Token).key == "-") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
 			queue = append(queue, i)
 			isexpr = true
-		} else if i.(keyword).key == "*" || i.(keyword).key == "/" {
+		} else if i.(Token).key == "*" || i.(Token).key == "/" {
 			if isexpr {
 				fmt.Println("Error: unexpected", i, "(expected value) on line", line+1)
 			}
-			for len(queue) > 0 && (queue[len(queue)-1].(keyword).key == "*" || queue[len(queue)-1].(keyword).key == "/") {
+			for len(queue) > 0 && (queue[len(queue)-1].(Token).key == "*" || queue[len(queue)-1].(Token).key == "/") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
 			queue = append(queue, i)
 			isexpr = true
 		} else {
-			if !(isexpr || (output == nil && queue == nil)) {
+			if !isexpr {
 				fmt.Println("Error: unexpected", i, "(expected expression) on line", line)
 				os.Exit(1)
 			}
-			output = append(output, i)
-			isexpr = false
+			prev = i.(Token).key
 		}
 	}
 
 	for i := len(queue) - 1; i > -1; i-- {
-		if queue[i].(keyword).key == "(" {
+		if typeof(queue[i]) == "main.Token" && queue[i].(Token).key == "(" {
 			fmt.Println("Error: missing ) on line", line+1)
 			os.Exit(1)
 		}
@@ -238,20 +295,29 @@ func shuntingyard(tokens []any, line int) []any {
 func parse(program [][]any, _ []int) []any {
 	var lines []any
 	for i, line := range program {
-		line = shuntingyard(line, i)
+		line = format(line, i)
+		fmt.Println(line)
 		var values []any
 		for _, x := range line {
-			if typeof(x) == "main.keyword" {
-				key := x.(keyword).key
+			if typeof(x) == "main.Token" {
+				key := x.(Token).key
 				if key == "+" || key == "-" || key == "*" || key == "/" {
 					if len(values) < 2 {
 						fmt.Println("Error: missing argument for", key, "on line", i+1)
 						os.Exit(1)
 					}
-					values = append(values[:len(values)-2], expression{values[len(values)-2], key, values[len(values)-1]})
+					values = append(values[:len(values)-2], Expression{values[len(values)-2], key, values[len(values)-1]})
 				} else {
 					values = append(values, key)
 				}
+			} else if typeof(x) == "main.Function" {
+				f := x.(Function)
+				if len(values) < f.argcount {
+					fmt.Println("Error: internal error, line", i+1)
+					os.Exit(1)
+				}
+				f.args = slices.Clone(values[len(values)-f.argcount:])
+				values = append(values[:len(values)-f.argcount], f)
 			} else {
 				values = append(values, x)
 			}
@@ -267,8 +333,8 @@ func parse(program [][]any, _ []int) []any {
 func eval(expr any, line int) any {
 	if typeof(expr) == "string" || typeof(expr) == "float64" || typeof(expr) == "int" {
 		return expr
-	} else if typeof(expr) == "main.expression" {
-		key := expr.(expression)
+	} else if typeof(expr) == "main.Expression" {
+		key := expr.(Expression)
 		if key.expr == "+" {
 			first := eval(key.first, line)
 			second := eval(key.second, line)
@@ -287,7 +353,7 @@ func eval(expr any, line int) any {
 			if typeof(first) == "float64" && typeof(second) == "int" {
 				return first.(float64) + float64(second.(int))
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "( types", typeof(first), "and", typeof(second), ") on line", line)
+			fmt.Println("Error: mismatched types", first, "and", second, "( types", typeof(first), "and", typeof(second), ") on line", line+1)
 			os.Exit(1)
 		}
 		if key.expr == "-" {
@@ -305,7 +371,7 @@ func eval(expr any, line int) any {
 			if typeof(first) == "float64" && typeof(second) == "int" {
 				return first.(float64) - float64(second.(int))
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "for {-} ( types", typeof(first), "and", typeof(second), ") on line", line)
+			fmt.Println("Error: mismatched types", first, "and", second, "for {-} ( types", typeof(first), "and", typeof(second), ") on line", line+1)
 			os.Exit(1)
 		}
 		if key.expr == "*" {
@@ -323,7 +389,7 @@ func eval(expr any, line int) any {
 			if typeof(first) == "float64" && typeof(second) == "int" {
 				return first.(float64) * float64(second.(int))
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "for {*} ( types", typeof(first), "and", typeof(second), ") on line", line)
+			fmt.Println("Error: mismatched types", first, "and", second, "for {*} ( types", typeof(first), "and", typeof(second), ") on line", line+1)
 			os.Exit(1)
 		}
 		if key.expr == "/" {
@@ -341,11 +407,29 @@ func eval(expr any, line int) any {
 			if typeof(first) == "float64" && typeof(second) == "int" {
 				return first.(float64) / float64(second.(int))
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "for {/} ( types", typeof(first), "and", typeof(second), ") on line", line)
+			fmt.Println("Error: mismatched types", first, "and", second, "for {/} ( types", typeof(first), "and", typeof(second), ") on line", line+1)
 			os.Exit(1)
 		}
+	} else if typeof(expr) == "main.Function" {
+		name := expr.(Function).name
+		args := expr.(Function).args
+		if name == "print" {
+			str := ""
+			for _, i := range args {
+				i = eval(i, line)
+				if typeof(i) == "string" {
+					str += i.(string)
+				} else if typeof(i) == "int" {
+					str += strconv.Itoa(i.(int))
+				} else if typeof(i) == "float64" {
+					str += strconv.FormatFloat(i.(float64), 'f', -1, 64)
+				}
+			}
+			fmt.Println(str)
+			return str
+		}
 	}
-	return typeof(expr)
+	return expr
 }
 
 func main() {
@@ -355,5 +439,5 @@ func main() {
 	lexed, indents := lex(contents)
 	parsed := parse(lexed, indents)
 	fmt.Println(parsed...)
-	fmt.Println(eval(parsed[0], 0))
+	eval(parsed[0], 0)
 }

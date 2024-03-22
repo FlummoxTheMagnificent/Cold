@@ -214,7 +214,8 @@ func format(tokens []any, line int) []any {
 			}
 			isexpr = true
 			if len(werevalues) == 0 {
-				fmt.Println("Error: unexpected , on line", line)
+				fmt.Println("Error: unexpected , on line", line+1)
+				os.Exit(1)
 			}
 			if werevalues[len(werevalues)-1] {
 				argcount[len(argcount)-1]++

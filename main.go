@@ -69,9 +69,9 @@ func lex(txt string) ([][]any, []int) {
 				} else {
 					if token != nil {
 						line = append(line, token)
-						token = ""
 						data = nil
 					}
+					token = ""
 				}
 			} else if typeof(token) == "string" {
 				token = token.(string) + char
@@ -125,7 +125,9 @@ func lex(txt string) ([][]any, []int) {
 					token = Token{"="}
 				}
 			} else if char == "," {
-				line = append(line, token)
+				if token != nil {
+					line = append(line, token)
+				}
 				line = append(line, Token{","})
 				token = nil
 				data = nil
@@ -296,7 +298,6 @@ func parse(program [][]any, _ []int) []any {
 	var lines []any
 	for i, line := range program {
 		line = format(line, i)
-		fmt.Println(line)
 		var values []any
 		for _, x := range line {
 			if typeof(x) == "main.Token" {
@@ -438,6 +439,5 @@ func main() {
 	contents := string(contentsByteArray)
 	lexed, indents := lex(contents)
 	parsed := parse(lexed, indents)
-	fmt.Println(parsed...)
 	eval(parsed[0], 0)
 }

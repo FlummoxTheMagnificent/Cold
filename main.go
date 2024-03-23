@@ -25,7 +25,12 @@ type Function struct {
 	argcount int
 }
 type Keyword struct {
-	word string
+	key string
+}
+type CodeBlock struct {
+	key  string
+	data string
+	code []any
 }
 
 func lex(txt string) ([][]any, []int) {
@@ -121,7 +126,9 @@ func lex(txt string) ([][]any, []int) {
 						line = append(line, Token{"="})
 					}
 				} else {
-					line = append(line, token)
+					if token != nil {
+						line = append(line, token)
+					}
 					token = Token{"="}
 				}
 			} else if char == "," {
@@ -178,8 +185,16 @@ func format(tokens []any, line int) []any {
 				}
 				werevalues = append(werevalues, false)
 			} else {
+				if !(isexpr || (output == nil && queue == nil)) {
+					fmt.Println("Error: unexpected", prev, "on line", line)
+					os.Exit(1)
+				}
+				negate = false
 				output = append(output, Keyword{prev})
 				isexpr = false
+				if len(werevalues) > 0 {
+					werevalues[len(werevalues)-1] = true
+				}
 			}
 			prev = ""
 		}
@@ -294,52 +309,62 @@ func format(tokens []any, line int) []any {
 	}
 	return output
 }
-
+func parseexpr(expr []any, line int) any {
+	expr = format(expr, line)
+	var values []any
+	for _, x := range expr {
+		if typeof(x) == "main.Token" {
+			key := x.(Token).key
+			if key == "+" || key == "-" || key == "*" || key == "/" {
+				if len(values) < 2 {
+					fmt.Println("Error: missing argument for", key, "on line", line+1)
+					os.Exit(1)
+				}
+				values = append(values[:len(values)-2], Expression{values[len(values)-2], key, values[len(values)-1]})
+			} else {
+				values = append(values, key)
+			}
+		} else if typeof(x) == "main.Function" {
+			f := x.(Function)
+			if len(values) < f.argcount {
+				fmt.Println("Error: internal error, line", line+1)
+				os.Exit(1)
+			}
+			f.args = slices.Clone(values[len(values)-f.argcount:])
+			values = append(values[:len(values)-f.argcount], f)
+		} else {
+			values = append(values, x)
+		}
+	}
+	if len(values) != 1 {
+		if len(values) == 0 {
+			fmt.Println("Error: missing expression on line", line+1)
+		} else {
+			fmt.Println("Error: failed to parse expression on line", line+1)
+		}
+		os.Exit(1)
+	}
+	return values[0]
+}
 func parse(program [][]any, _ []int) []any {
 	var lines []any
 	for i, line := range program {
-		line = format(line, i)
-		var values []any
-		for _, x := range line {
-			if typeof(x) == "main.Token" {
-				key := x.(Token).key
-				if key == "+" || key == "-" || key == "*" || key == "/" {
-					if len(values) < 2 {
-						fmt.Println("Error: missing argument for", key, "on line", i+1)
-						os.Exit(1)
-					}
-					values = append(values[:len(values)-2], Expression{values[len(values)-2], key, values[len(values)-1]})
-				} else {
-					values = append(values, key)
-				}
-			} else if typeof(x) == "main.Function" {
-				f := x.(Function)
-				if len(values) < f.argcount {
-					fmt.Println("Error: internal error, line", i+1)
-					os.Exit(1)
-				}
-				f.args = slices.Clone(values[len(values)-f.argcount:])
-				values = append(values[:len(values)-f.argcount], f)
-			} else {
-				values = append(values, x)
-			}
+		if typeof(line[0]) == "main.Token" && typeof(line[1]) == "main.Token" && line[1].(Token).key == "=" {
+			lines = append(lines, CodeBlock{"var", line[0].(Token).key, []any{parseexpr(line[2:], i)}})
+		} else {
+			lines = append(lines, parseexpr(line, i))
 		}
-		if len(values) == 0 {
-			continue
-		}
-		lines = append(lines, values[0])
 	}
 	return lines
 }
-
-func eval(expr any, line int) any {
+func eval(expr any, line int, v *map[any]any) any {
 	if typeof(expr) == "string" || typeof(expr) == "float64" || typeof(expr) == "int" {
 		return expr
 	} else if typeof(expr) == "main.Expression" {
 		key := expr.(Expression)
 		if key.expr == "+" {
-			first := eval(key.first, line)
-			second := eval(key.second, line)
+			first := eval(key.first, line, v)
+			second := eval(key.second, line, v)
 			if typeof(first) == "int" && typeof(second) == "int" {
 				return first.(int) + second.(int)
 			}
@@ -359,8 +384,8 @@ func eval(expr any, line int) any {
 			os.Exit(1)
 		}
 		if key.expr == "-" {
-			first := eval(key.first, line)
-			second := eval(key.second, line)
+			first := eval(key.first, line, v)
+			second := eval(key.second, line, v)
 			if typeof(first) == "int" && typeof(second) == "int" {
 				return first.(int) - second.(int)
 			}
@@ -377,8 +402,8 @@ func eval(expr any, line int) any {
 			os.Exit(1)
 		}
 		if key.expr == "*" {
-			first := eval(key.first, line)
-			second := eval(key.second, line)
+			first := eval(key.first, line, v)
+			second := eval(key.second, line, v)
 			if typeof(first) == "int" && typeof(second) == "int" {
 				return first.(int) * second.(int)
 			}
@@ -395,8 +420,8 @@ func eval(expr any, line int) any {
 			os.Exit(1)
 		}
 		if key.expr == "/" {
-			first := eval(key.first, line)
-			second := eval(key.second, line)
+			first := eval(key.first, line, v)
+			second := eval(key.second, line, v)
 			if typeof(first) == "int" && typeof(second) == "int" {
 				return float64(first.(int)) / float64(second.(int))
 			}
@@ -418,20 +443,39 @@ func eval(expr any, line int) any {
 		if name == "print" {
 			str := ""
 			for _, i := range args {
-				i = eval(i, line)
+				i = eval(i, line, v)
 				if typeof(i) == "string" {
 					str += i.(string)
 				} else if typeof(i) == "int" {
 					str += strconv.Itoa(i.(int))
 				} else if typeof(i) == "float64" {
 					str += strconv.FormatFloat(i.(float64), 'f', -1, 64)
+				} else {
+					fmt.Println("Error: internal error")
+					os.Exit(1)
 				}
 			}
 			fmt.Println(str)
 			return str
 		}
+	} else if typeof(expr) == "main.Keyword" {
+		return (*v)[expr.(Keyword).key]
+	} else if typeof(expr) == "main.CodeBlock" {
+		if expr.(CodeBlock).key == "var" {
+			if len(expr.(CodeBlock).code) > 1 {
+				fmt.Println("Error: internal error")
+				os.Exit(1)
+			}
+			(*v)[expr.(CodeBlock).data] = eval(expr.(CodeBlock).code[0], line, v)
+		}
 	}
 	return expr
+}
+func exec(program []any) {
+	variables := make(map[any]any)
+	for i, x := range program {
+		eval(x, i, &variables)
+	}
 }
 
 func main() {
@@ -440,5 +484,5 @@ func main() {
 	contents := string(contentsByteArray)
 	lexed, indents := lex(contents)
 	parsed := parse(lexed, indents)
-	eval(parsed[0], 0)
+	exec(parsed)
 }

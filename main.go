@@ -141,6 +141,12 @@ func lex(txt string) ([][]any, []int) {
 				line = append(line, Token{","})
 				token = nil
 				data = nil
+			} else if char == "#" {
+				if token != nil {
+					line = append(line, token)
+					token = nil
+				}
+				break
 			} else {
 				if token == nil {
 					token = Token{char}
@@ -160,7 +166,9 @@ func lex(txt string) ([][]any, []int) {
 		if token != nil {
 			line = append(line, token)
 		}
-		lexed = append(lexed, line)
+		if line != nil {
+			lexed = append(lexed, line)
+		}
 		line = nil
 	}
 
@@ -368,20 +376,21 @@ func eval(expr any, line int, v *map[any]any) any {
 		if key.expr == "+" {
 			first := eval(key.first, line, v)
 			second := eval(key.second, line, v)
-			if typeof(first) == "int" && typeof(second) == "int" {
+			firstType := typeof(first)
+			secondType := typeof(second)
+			if firstType == "int" && secondType == "int" {
 				return first.(int) + second.(int)
-			}
-			if typeof(first) == "float64" && typeof(second) == "float64" {
-				return first.(float64) + second.(float64)
-			}
-			if typeof(first) == "string" && typeof(second) == "string" {
+			} else if firstType == "string" || secondType == "string" {
+				if firstType == "int" {
+					first = strconv.Itoa(first.(int))
+				} else if firstType == "float64" {
+					first = strconv.FormatFloat(first.(float64), 'f', -1, 64)
+				} else if secondType == "int" {
+					second = strconv.Itoa(second.(int))
+				} else if secondType == "float64" {
+					second = strconv.FormatFloat(second.(float64), 'f', -1, 64)
+				}
 				return first.(string) + second.(string)
-			}
-			if typeof(first) == "int" && typeof(second) == "float64" {
-				return float64(first.(int)) + second.(float64)
-			}
-			if typeof(first) == "float64" && typeof(second) == "int" {
-				return first.(float64) + float64(second.(int))
 			}
 			fmt.Println("Error: mismatched types", first, "and", second, "( types", typeof(first), "and", typeof(second), ") on line", line+1)
 			os.Exit(1)
@@ -443,7 +452,7 @@ func eval(expr any, line int, v *map[any]any) any {
 	} else if typeof(expr) == "main.Function" {
 		name := expr.(Function).name
 		args := expr.(Function).args
-		if name == "print" {
+		if name == "println" {
 			str := ""
 			for _, i := range args {
 				i = eval(i, line, v)
@@ -460,6 +469,32 @@ func eval(expr any, line int, v *map[any]any) any {
 			}
 			fmt.Println(str)
 			return str
+		} else if name == "print" {
+			str := ""
+			for _, i := range args {
+				i = eval(i, line, v)
+				if typeof(i) == "string" {
+					str += i.(string)
+				} else if typeof(i) == "int" {
+					str += strconv.Itoa(i.(int))
+				} else if typeof(i) == "float64" {
+					str += strconv.FormatFloat(i.(float64), 'f', -1, 64)
+				} else {
+					fmt.Println("Error: internal error")
+					os.Exit(1)
+				}
+			}
+			fmt.Print(str)
+			return str
+		} else if name == "typeof" {
+			if len(args) > 1 {
+				fmt.Println("Error: too many arguments for 'typeof', line", line)
+				os.Exit(1)
+			} else if len(args) == 0 {
+				fmt.Println("Error: not enough arguments for 'typeof', line", line)
+				os.Exit(1)
+			}
+			return typeof(eval(args[0], line, v))
 		}
 	} else if typeof(expr) == "main.Keyword" {
 		return (*v)[expr.(Keyword).key]

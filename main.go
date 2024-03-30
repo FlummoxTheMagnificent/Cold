@@ -81,7 +81,9 @@ func lex(txt string) ([][]any, []int) {
 			} else if typeof(token) == "string" {
 				token = token.(string) + char
 			} else if char == " " {
-				line = append(line, token)
+				if token != nil {
+					line = append(line, token)
+				}
 				token = nil
 				data = nil
 			} else if char == "." {
@@ -92,7 +94,8 @@ func lex(txt string) ([][]any, []int) {
 						fmt.Println("Error: unexpected . on line", linenum+1)
 						os.Exit(1)
 					}
-					line = append(line, [2]any{token, "."})
+					line = append(line, token)
+					line = append(line, Token{"."})
 					token = nil
 					data = nil
 				}

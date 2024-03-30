@@ -119,7 +119,7 @@ func Lex(txt string) ([][]any, []int) {
 				}
 				token = Token{char}
 			} else if char == "=" {
-				if typeof(token) == "main.Token" {
+				if typeof(token) == "cold.Token" {
 					key := token.(Token).key
 					if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" || key == "!" {
 						token = Token{key + char}
@@ -151,7 +151,7 @@ func Lex(txt string) ([][]any, []int) {
 				if token == nil {
 					token = Token{char}
 				} else {
-					if typeof(token) == "main.Token" {
+					if typeof(token) == "cold.Token" {
 						key := token.(Token).key
 						if key == "{" || key == "}" || key == "(" || key == ")" || key == "+" || key == "-" || key == "*" || key == "/" || key == "!" || key == ":" {
 							line = append(line, Token{key})
@@ -188,7 +188,7 @@ func format(tokens []any, line int) []any {
 	var prev string
 	for _, i := range tokens {
 		if prev != "" {
-			if typeof(i) == "main.Token" && i.(Token).key == "(" {
+			if typeof(i) == "cold.Token" && i.(Token).key == "(" {
 				queue = append(queue, Function{prev, []any{}, 0})
 				argcount = append(argcount, 0)
 				if len(werevalues) > 0 {
@@ -234,7 +234,7 @@ func format(tokens []any, line int) []any {
 				werevalues[len(werevalues)-1] = true
 			}
 		} else if i.(Token).key == "," {
-			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "main.Function" || queue[len(queue)-1].(Token).key != "(") {
+			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "cold.Function" || queue[len(queue)-1].(Token).key != "(") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -255,7 +255,7 @@ func format(tokens []any, line int) []any {
 				os.Exit(1)
 			}
 			for {
-				if typeof(queue[len(queue)-1]) != "main.Function" && queue[len(queue)-1].(Token).key == "(" {
+				if typeof(queue[len(queue)-1]) != "cold.Function" && queue[len(queue)-1].(Token).key == "(" {
 					queue = queue[:len(queue)-1]
 					break
 				} else if len(queue) == 1 {
@@ -265,7 +265,7 @@ func format(tokens []any, line int) []any {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
-			if typeof(queue[len(queue)-1]) == "main.Function" {
+			if typeof(queue[len(queue)-1]) == "cold.Function" {
 				f := queue[len(queue)-1].(Function)
 				queue = queue[:len(queue)-1]
 				if werevalues[len(werevalues)-1] {
@@ -304,7 +304,7 @@ func format(tokens []any, line int) []any {
 			isexpr = true
 		} else {
 			if !isexpr {
-				fmt.Println("Error: unexpected", i, "(expected expression) on line", line)
+				fmt.Println("Error: unexpected", i, "(expected expression) on line", line+1)
 				os.Exit(1)
 			}
 			prev = i.(Token).key
@@ -312,7 +312,7 @@ func format(tokens []any, line int) []any {
 	}
 
 	for i := len(queue) - 1; i > -1; i-- {
-		if typeof(queue[i]) == "main.Token" && queue[i].(Token).key == "(" {
+		if typeof(queue[i]) == "cold.Token" && queue[i].(Token).key == "(" {
 			fmt.Println("Error: missing ) on line", line+1)
 			os.Exit(1)
 		}
@@ -324,7 +324,7 @@ func parseexpr(expr []any, line int) any {
 	expr = format(expr, line)
 	var values []any
 	for _, x := range expr {
-		if typeof(x) == "main.Token" {
+		if typeof(x) == "cold.Token" {
 			key := x.(Token).key
 			if key == "+" || key == "-" || key == "*" || key == "/" {
 				if len(values) < 2 {
@@ -335,7 +335,7 @@ func parseexpr(expr []any, line int) any {
 			} else {
 				values = append(values, key)
 			}
-		} else if typeof(x) == "main.Function" {
+		} else if typeof(x) == "cold.Function" {
 			f := x.(Function)
 			if len(values) < f.argcount {
 				fmt.Println("Error: internal error, line", line+1)
@@ -360,7 +360,7 @@ func parseexpr(expr []any, line int) any {
 func Parse(program [][]any, _ []int) []any {
 	var lines []any
 	for i, line := range program {
-		if len(line) > 2 && typeof(line[0]) == "main.Token" && typeof(line[1]) == "main.Token" && line[1].(Token).key == "=" {
+		if len(line) > 2 && typeof(line[0]) == "cold.Token" && typeof(line[1]) == "cold.Token" && line[1].(Token).key == "=" {
 			lines = append(lines, CodeBlock{"var", line[0].(Token).key, []any{parseexpr(line[2:], i)}})
 		} else {
 			lines = append(lines, parseexpr(line, i))
@@ -371,7 +371,7 @@ func Parse(program [][]any, _ []int) []any {
 func eval(expr any, line int, v *map[any]any) any {
 	if typeof(expr) == "string" || typeof(expr) == "float64" || typeof(expr) == "int" {
 		return expr
-	} else if typeof(expr) == "main.Expression" {
+	} else if typeof(expr) == "cold.Expression" {
 		key := expr.(Expression)
 		if key.expr == "+" {
 			first := eval(key.first, line, v)
@@ -454,7 +454,7 @@ func eval(expr any, line int, v *map[any]any) any {
 			fmt.Println("Error: mismatched types", first, "and", second, "for {/} ( types", typeof(first), "and", typeof(second), ") on line", line+1)
 			os.Exit(1)
 		}
-	} else if typeof(expr) == "main.Function" {
+	} else if typeof(expr) == "cold.Function" {
 		name := expr.(Function).name
 		args := expr.(Function).args
 		if name == "println" {
@@ -505,9 +505,9 @@ func eval(expr any, line int, v *map[any]any) any {
 			}
 			return argType
 		}
-	} else if typeof(expr) == "main.Keyword" {
+	} else if typeof(expr) == "cold.Keyword" {
 		return (*v)[expr.(Keyword).key]
-	} else if typeof(expr) == "main.CodeBlock" {
+	} else if typeof(expr) == "cold.CodeBlock" {
 		if expr.(CodeBlock).key == "var" {
 			if len(expr.(CodeBlock).code) > 1 {
 				fmt.Println("Error: internal error")
@@ -528,11 +528,4 @@ func Interpret(file string) {
 	lexed, indents := Lex(file)
 	parsed := Parse(lexed, indents)
 	Evaluate(parsed)
-}
-
-func main() {
-	file := os.Args[1]
-	contentsByteArray, _ := os.ReadFile(file)
-	contents := string(contentsByteArray)
-	Interpret(contents)
 }

@@ -1,4 +1,4 @@
-package main
+package cold
 
 import (
 	"fmt"
@@ -33,7 +33,7 @@ type CodeBlock struct {
 	code []any
 }
 
-func lex(txt string) ([][]any, []int) {
+func Lex(txt string) ([][]any, []int) {
 	var indents []int
 
 	// Split by newlines and count indents
@@ -357,10 +357,10 @@ func parseexpr(expr []any, line int) any {
 	}
 	return values[0]
 }
-func parse(program [][]any, _ []int) []any {
+func Parse(program [][]any, _ []int) []any {
 	var lines []any
 	for i, line := range program {
-		if typeof(line[0]) == "main.Token" && typeof(line[1]) == "main.Token" && line[1].(Token).key == "=" {
+		if len(line) > 2 && typeof(line[0]) == "main.Token" && typeof(line[1]) == "main.Token" && line[1].(Token).key == "=" {
 			lines = append(lines, CodeBlock{"var", line[0].(Token).key, []any{parseexpr(line[2:], i)}})
 		} else {
 			lines = append(lines, parseexpr(line, i))
@@ -518,18 +518,21 @@ func eval(expr any, line int, v *map[any]any) any {
 	}
 	return expr
 }
-func exec(program []any) {
+func Evaluate(program []any) {
 	variables := make(map[any]any)
 	for i, x := range program {
 		eval(x, i, &variables)
 	}
+}
+func Interpret(file string) {
+	lexed, indents := Lex(file)
+	parsed := Parse(lexed, indents)
+	Evaluate(parsed)
 }
 
 func main() {
 	file := os.Args[1]
 	contentsByteArray, _ := os.ReadFile(file)
 	contents := string(contentsByteArray)
-	lexed, indents := lex(contents)
-	parsed := parse(lexed, indents)
-	exec(parsed)
+	Interpret(contents)
 }

@@ -391,9 +391,14 @@ func eval(expr any, line int, v *map[any]any) any {
 					second = strconv.FormatFloat(second.(float64), 'f', -1, 64)
 				}
 				return first.(string) + second.(string)
+			} else {
+				if firstType == "int" {
+					first = float64(first.(int))
+				} else if secondType == "int" {
+					second = float64(second.(int))
+				}
+				return first.(float64) + second.(float64)
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "( types", typeof(first), "and", typeof(second), ") on line", line+1)
-			os.Exit(1)
 		}
 		if key.expr == "-" {
 			first := eval(key.first, line, v)
@@ -494,7 +499,11 @@ func eval(expr any, line int, v *map[any]any) any {
 				fmt.Println("Error: not enough arguments for 'typeof', line", line)
 				os.Exit(1)
 			}
-			return typeof(eval(args[0], line, v))
+			argType := typeof(eval(args[0], line, v))
+			if argType == "float64" {
+				return "float"
+			}
+			return argType
 		}
 	} else if typeof(expr) == "main.Keyword" {
 		return (*v)[expr.(Keyword).key]

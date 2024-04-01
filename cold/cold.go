@@ -3,11 +3,18 @@ package cold
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"slices"
 	"strconv"
+
+	"github.com/FlummoxTheMagnificent/Cold/tree/main/lex"
+
+	"github.com/llir/llvm/ir"
+	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/types"
 )
 
-func typeof(v interface{}) string {
+func typeof(v any) string {
 	return fmt.Sprintf("%T", v)
 }
 
@@ -33,149 +40,7 @@ type CodeBlock struct {
 	code []any
 }
 
-func Lex(txt string) ([][]any, []int) {
-	var indents []int
-
-	// Split by newlines and count indents
-	var split []string
-	var text string
-	indent := 0
-	for _, i := range txt {
-		if string(i) == "\n" {
-			split = append(split, text)
-			text = ""
-		} else {
-			if text == "" {
-				if string(i) == "\t" {
-					indent++
-					continue
-				} else {
-					indents = append(indents, indent)
-					indent = 0
-				}
-			}
-			text += string(i)
-		}
-	}
-	split = append(split, text)
-
-	// Split each line into tokens
-	var lexed [][]any
-	var line []any
-	for linenum, i := range split {
-		var token any
-		var data any
-		for _, j := range i {
-			char := string(j)
-			if char == "\"" {
-				if typeof(token) == "string" {
-					line = append(line, token)
-					token = nil
-				} else {
-					if token != nil {
-						line = append(line, token)
-						data = nil
-					}
-					token = ""
-				}
-			} else if typeof(token) == "string" {
-				token = token.(string) + char
-			} else if char == " " {
-				if token != nil {
-					line = append(line, token)
-				}
-				token = nil
-				data = nil
-			} else if char == "." {
-				if typeof(token) == "int" {
-					token = float64(token.(int))
-				} else {
-					if typeof(token) == "float64" {
-						fmt.Println("Error: unexpected . on line", linenum+1)
-						os.Exit(1)
-					}
-					line = append(line, token)
-					line = append(line, Token{"."})
-					token = nil
-					data = nil
-				}
-			} else if num, err := strconv.Atoi(char); err == nil {
-				if typeof(token) == "int" {
-					token = token.(int)*10 + num
-				} else if typeof(token) == "float64" {
-					token = token.(float64) + float64(num)/float64(data.(int))
-					data = data.(int) * 10
-				} else {
-					if token != nil {
-						line = append(line, token)
-					}
-					token = num
-					data = 10
-				}
-			} else if char == "{" || char == "}" || char == "(" || char == ")" || char == "+" || char == "-" || char == "*" || char == "/" || char == "!" || char == ":" {
-				if token != nil {
-					line = append(line, token)
-					data = nil
-				}
-				token = Token{char}
-			} else if char == "=" {
-				if typeof(token) == "cold.Token" {
-					key := token.(Token).key
-					if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" || key == "!" {
-						token = Token{key + char}
-					} else {
-						line = append(line, token)
-						token = nil
-						line = append(line, Token{"="})
-					}
-				} else {
-					if token != nil {
-						line = append(line, token)
-					}
-					token = Token{"="}
-				}
-			} else if char == "," {
-				if token != nil {
-					line = append(line, token)
-				}
-				line = append(line, Token{","})
-				token = nil
-				data = nil
-			} else if char == "#" {
-				if token != nil {
-					line = append(line, token)
-					token = nil
-				}
-				break
-			} else {
-				if token == nil {
-					token = Token{char}
-				} else {
-					if typeof(token) == "cold.Token" {
-						key := token.(Token).key
-						if key == "{" || key == "}" || key == "(" || key == ")" || key == "+" || key == "-" || key == "*" || key == "/" || key == "!" || key == ":" {
-							line = append(line, Token{key})
-							key = ""
-						}
-						token = Token{key + char}
-					}
-				}
-			}
-		}
-
-		if token != nil {
-			line = append(line, token)
-		}
-		if line != nil {
-			lexed = append(lexed, line)
-		}
-		line = nil
-	}
-
-	return lexed, indents
-}
-
-func format(tokens []any, line int) []any {
+func format(tokens []any) []any {
 	// Heavily modified shunting yard algorithm
 	// Partially from https://blog.kallisti.net.nz/2008/02/extension-to-the-shunting-yard-algorithm-to-allow-variable-numbers-of-arguments-to-functions/
 	var output []any
@@ -188,7 +53,7 @@ func format(tokens []any, line int) []any {
 	var prev string
 	for _, i := range tokens {
 		if prev != "" {
-			if typeof(i) == "cold.Token" && i.(Token).key == "(" {
+			if typeof(i) == "lex.Token" && i.(lex.Token).Key == "(" {
 				queue = append(queue, Function{prev, []any{}, 0})
 				argcount = append(argcount, 0)
 				if len(werevalues) > 0 {
@@ -197,7 +62,7 @@ func format(tokens []any, line int) []any {
 				werevalues = append(werevalues, false)
 			} else {
 				if !(isexpr || (output == nil && queue == nil)) {
-					fmt.Println("Error: unexpected", prev, "on line", line)
+					fmt.Println("Error: unexpected", prev)
 					os.Exit(1)
 				}
 				negate = false
@@ -211,12 +76,12 @@ func format(tokens []any, line int) []any {
 		}
 		if typeof(i) == "int" || typeof(i) == "float64" || typeof(i) == "string" {
 			if !(isexpr || (output == nil && queue == nil)) {
-				fmt.Println("Error: unexpected", i, "on line", line)
+				fmt.Println("Error: unexpected", i)
 				os.Exit(1)
 			}
 			if negate {
 				if typeof(i) == "string" {
-					fmt.Println("Error: cannot negate", i, "on line", line)
+					fmt.Println("Error: cannot negate", i)
 					os.Exit(1)
 				} else {
 					if typeof(i) == "int" {
@@ -233,33 +98,33 @@ func format(tokens []any, line int) []any {
 			if len(werevalues) > 0 {
 				werevalues[len(werevalues)-1] = true
 			}
-		} else if i.(Token).key == "," {
+		} else if i.(lex.Token).Key == "," {
 			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "cold.Function" || queue[len(queue)-1].(Token).key != "(") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
 			isexpr = true
 			if len(werevalues) == 0 {
-				fmt.Println("Error: unexpected , on line", line+1)
+				fmt.Println("Error: unexpected, on line")
 				os.Exit(1)
 			}
 			if werevalues[len(werevalues)-1] {
 				argcount[len(argcount)-1]++
 				werevalues[len(werevalues)-1] = false
 			}
-		} else if i.(Token).key == "(" {
+		} else if i.(lex.Token).Key == "(" {
 			queue = append(queue, i)
-		} else if i.(Token).key == ")" {
+		} else if i.(lex.Token).Key == ")" {
 			if len(queue) == 0 {
-				fmt.Println("Error: missing ( on line", line+1)
+				fmt.Println("Error: missing (")
 				os.Exit(1)
 			}
 			for {
-				if typeof(queue[len(queue)-1]) != "cold.Function" && queue[len(queue)-1].(Token).key == "(" {
+				if typeof(queue[len(queue)-1]) != "cold.Function" && queue[len(queue)-1].(lex.Token).Key == "(" {
 					queue = queue[:len(queue)-1]
 					break
 				} else if len(queue) == 1 {
-					fmt.Println("Error: missing ( on line", line+1)
+					fmt.Println("Error: missing (")
 					os.Exit(1)
 				}
 				output = append(output, queue[len(queue)-1])
@@ -276,27 +141,27 @@ func format(tokens []any, line int) []any {
 				argcount = argcount[:len(argcount)-1]
 				output = append(output, f)
 			}
-		} else if i.(Token).key == "+" || i.(Token).key == "-" {
+		} else if i.(lex.Token).Key == "+" || i.(lex.Token).Key == "-" {
 			if isexpr {
-				if i.(Token).key == "-" && !negate {
+				if i.(lex.Token).Key == "-" && !negate {
 					negate = true
 					continue
 				} else {
-					fmt.Println("Error: unexpected", i, "(expected value) on line", line+1)
+					fmt.Println("Error: unexpected", i, "(expected value) on")
 					os.Exit(1)
 				}
 			}
-			for len(queue) > 0 && (queue[len(queue)-1].(Token).key == "*" || queue[len(queue)-1].(Token).key == "/" || queue[len(queue)-1].(Token).key == "+" || queue[len(queue)-1].(Token).key == "-") {
+			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/" || queue[len(queue)-1].(lex.Token).Key == "+" || queue[len(queue)-1].(lex.Token).Key == "-") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
 			queue = append(queue, i)
 			isexpr = true
-		} else if i.(Token).key == "*" || i.(Token).key == "/" {
+		} else if i.(lex.Token).Key == "*" || i.(lex.Token).Key == "/" {
 			if isexpr {
-				fmt.Println("Error: unexpected", i, "(expected value) on line", line+1)
+				fmt.Println("Error: unexpected", i, "(expected value)")
 			}
-			for len(queue) > 0 && (queue[len(queue)-1].(Token).key == "*" || queue[len(queue)-1].(Token).key == "/") {
+			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -304,31 +169,31 @@ func format(tokens []any, line int) []any {
 			isexpr = true
 		} else {
 			if !isexpr {
-				fmt.Println("Error: unexpected", i, "(expected expression) on line", line+1)
+				fmt.Println("Error: unexpected", i, "(expected expression)")
 				os.Exit(1)
 			}
-			prev = i.(Token).key
+			prev = i.(lex.Token).Key
 		}
 	}
 
 	for i := len(queue) - 1; i > -1; i-- {
-		if typeof(queue[i]) == "cold.Token" && queue[i].(Token).key == "(" {
-			fmt.Println("Error: missing ) on line", line+1)
+		if typeof(queue[i]) == "cold.Token" && queue[i].(lex.Token).Key == "(" {
+			fmt.Println("Error: missing )")
 			os.Exit(1)
 		}
 		output = append(output, queue[i])
 	}
 	return output
 }
-func parseexpr(expr []any, line int) any {
-	expr = format(expr, line)
+func parseexpr(expr []any) any {
+	expr = format(expr)
 	var values []any
 	for _, x := range expr {
-		if typeof(x) == "cold.Token" {
-			key := x.(Token).key
+		if typeof(x) == "lex.Token" {
+			key := x.(lex.Token).Key
 			if key == "+" || key == "-" || key == "*" || key == "/" {
 				if len(values) < 2 {
-					fmt.Println("Error: missing argument for", key, "on line", line+1)
+					fmt.Println("Error: missing argument for", key)
 					os.Exit(1)
 				}
 				values = append(values[:len(values)-2], Expression{values[len(values)-2], key, values[len(values)-1]})
@@ -338,7 +203,7 @@ func parseexpr(expr []any, line int) any {
 		} else if typeof(x) == "cold.Function" {
 			f := x.(Function)
 			if len(values) < f.argcount {
-				fmt.Println("Error: internal error, line", line+1)
+				fmt.Println("Error: internal error; please report")
 				os.Exit(1)
 			}
 			f.args = slices.Clone(values[len(values)-f.argcount:])
@@ -349,33 +214,36 @@ func parseexpr(expr []any, line int) any {
 	}
 	if len(values) != 1 {
 		if len(values) == 0 {
-			fmt.Println("Error: missing expression on line", line+1)
+			fmt.Println("Error: missing expression")
 		} else {
-			fmt.Println("Error: failed to parse expression on line", line+1)
+			fmt.Println("Error: failed to parse expression")
 		}
 		os.Exit(1)
 	}
 	return values[0]
 }
-func Parse(program [][]any, _ []int) []any {
+func parse(program [][]any, _ []int) []any {
 	var lines []any
-	for i, line := range program {
-		if len(line) > 2 && typeof(line[0]) == "cold.Token" && typeof(line[1]) == "cold.Token" && line[1].(Token).key == "=" {
-			lines = append(lines, CodeBlock{"var", line[0].(Token).key, []any{parseexpr(line[2:], i)}})
+	for _, line := range program {
+		if line == nil {
+			continue
+		}
+		if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "=" {
+			lines = append(lines, CodeBlock{"var", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
 		} else {
-			lines = append(lines, parseexpr(line, i))
+			lines = append(lines, parseexpr(line))
 		}
 	}
 	return lines
 }
-func eval(expr any, line int, v *map[any]any) any {
+func eval(expr any, v *map[string]any) any {
 	if typeof(expr) == "string" || typeof(expr) == "float64" || typeof(expr) == "int" {
 		return expr
 	} else if typeof(expr) == "cold.Expression" {
 		key := expr.(Expression)
 		if key.expr == "+" {
-			first := eval(key.first, line, v)
-			second := eval(key.second, line, v)
+			first := eval(key.first, v)
+			second := eval(key.second, v)
 			firstType := typeof(first)
 			secondType := typeof(second)
 			if firstType == "int" && secondType == "int" {
@@ -401,8 +269,8 @@ func eval(expr any, line int, v *map[any]any) any {
 			}
 		}
 		if key.expr == "-" {
-			first := eval(key.first, line, v)
-			second := eval(key.second, line, v)
+			first := eval(key.first, v)
+			second := eval(key.second, v)
 			if typeof(first) == "int" && typeof(second) == "int" {
 				return first.(int) - second.(int)
 			}
@@ -415,12 +283,12 @@ func eval(expr any, line int, v *map[any]any) any {
 			if typeof(first) == "float64" && typeof(second) == "int" {
 				return first.(float64) - float64(second.(int))
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "for {-} ( types", typeof(first), "and", typeof(second), ") on line", line+1)
+			fmt.Println("Error: mismatched types", first, "and", second, "for {-} (types", typeof(first)+" and "+typeof(second)+")")
 			os.Exit(1)
 		}
 		if key.expr == "*" {
-			first := eval(key.first, line, v)
-			second := eval(key.second, line, v)
+			first := eval(key.first, v)
+			second := eval(key.second, v)
 			if typeof(first) == "int" && typeof(second) == "int" {
 				return first.(int) * second.(int)
 			}
@@ -433,12 +301,12 @@ func eval(expr any, line int, v *map[any]any) any {
 			if typeof(first) == "float64" && typeof(second) == "int" {
 				return first.(float64) * float64(second.(int))
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "for {*} ( types", typeof(first), "and", typeof(second), ") on line", line+1)
+			fmt.Println("Error: mismatched types", first, "and", second, "for {*} (types", typeof(first)+" and "+typeof(second)+")")
 			os.Exit(1)
 		}
 		if key.expr == "/" {
-			first := eval(key.first, line, v)
-			second := eval(key.second, line, v)
+			first := eval(key.first, v)
+			second := eval(key.second, v)
 			if typeof(first) == "int" && typeof(second) == "int" {
 				return float64(first.(int)) / float64(second.(int))
 			}
@@ -451,7 +319,7 @@ func eval(expr any, line int, v *map[any]any) any {
 			if typeof(first) == "float64" && typeof(second) == "int" {
 				return first.(float64) / float64(second.(int))
 			}
-			fmt.Println("Error: mismatched types", first, "and", second, "for {/} ( types", typeof(first), "and", typeof(second), ") on line", line+1)
+			fmt.Println("Error: mismatched types", first, "and", second, "for {/} (types", typeof(first)+" and "+typeof(second)+")")
 			os.Exit(1)
 		}
 	} else if typeof(expr) == "cold.Function" {
@@ -460,7 +328,7 @@ func eval(expr any, line int, v *map[any]any) any {
 		if name == "println" {
 			str := ""
 			for _, i := range args {
-				i = eval(i, line, v)
+				i = eval(i, v)
 				if typeof(i) == "string" {
 					str += i.(string)
 				} else if typeof(i) == "int" {
@@ -477,7 +345,7 @@ func eval(expr any, line int, v *map[any]any) any {
 		} else if name == "print" {
 			str := ""
 			for _, i := range args {
-				i = eval(i, line, v)
+				i = eval(i, v)
 				if typeof(i) == "string" {
 					str += i.(string)
 				} else if typeof(i) == "int" {
@@ -493,13 +361,13 @@ func eval(expr any, line int, v *map[any]any) any {
 			return str
 		} else if name == "typeof" {
 			if len(args) > 1 {
-				fmt.Println("Error: too many arguments for 'typeof', line", line)
+				fmt.Println("Error: too many arguments for 'typeof'")
 				os.Exit(1)
 			} else if len(args) == 0 {
-				fmt.Println("Error: not enough arguments for 'typeof', line", line)
+				fmt.Println("Error: not enough arguments for 'typeof'")
 				os.Exit(1)
 			}
-			argType := typeof(eval(args[0], line, v))
+			argType := typeof(eval(args[0], v))
 			if argType == "float64" {
 				return "float"
 			}
@@ -513,19 +381,135 @@ func eval(expr any, line int, v *map[any]any) any {
 				fmt.Println("Error: internal error")
 				os.Exit(1)
 			}
-			(*v)[expr.(CodeBlock).data] = eval(expr.(CodeBlock).code[0], line, v)
+			(*v)[expr.(CodeBlock).data] = eval(expr.(CodeBlock).code[0], v)
 		}
 	}
 	return expr
 }
-func Evaluate(program []any) {
-	variables := make(map[any]any)
-	for i, x := range program {
-		eval(x, i, &variables)
+func evaluate(program []any) {
+	variables := make(map[string]any)
+	for _, x := range program {
+		eval(x, &variables)
 	}
 }
 func Interpret(file string) {
-	lexed, indents := Lex(file)
-	parsed := Parse(lexed, indents)
-	Evaluate(parsed)
+	lexed, indents := lex.Lex(file)
+	parsed := parse(lexed, indents)
+	evaluate(parsed)
+}
+func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block) any {
+	if typeof(expr) == "string" {
+		return constant.NewCharArrayFromString(expr.(string))
+	} else if typeof(expr) == "float64" {
+		return constant.NewFloat(types.Float, expr.(float64))
+	} else if typeof(expr) == "int" {
+		return constant.NewInt(types.I64, int64(expr.(int)))
+	} else if typeof(expr) == "cold.Expression" {
+		key := expr.(Expression)
+		if key.expr == "+" {
+			first := evalToLlvm(key.first, v, f, m, entry)
+			second := evalToLlvm(key.second, v, f, m, entry)
+			firstType := typeof(first)[10:]
+			secondType := typeof(second)[10:]
+			if firstType == "Int" && secondType == "Int" {
+				return entry.NewAdd(first.(*constant.Int), second.(*constant.Int))
+			} else if firstType == "Float" && secondType == "Float" {
+				return entry.NewFAdd(first.(*constant.Float), second.(*constant.Float))
+			} else if firstType == "Int" && secondType == "Float" {
+				return entry.NewFAdd(entry.NewSIToFP(first.(*constant.Int), types.Float), second.(*constant.Float))
+			} else if firstType == "Float" && secondType == "Int" {
+				return entry.NewFAdd(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
+			}
+		} else if key.expr == "-" {
+			first := evalToLlvm(key.first, v, f, m, entry)
+			second := evalToLlvm(key.second, v, f, m, entry)
+			firstType := typeof(first)[10:]
+			secondType := typeof(second)[10:]
+			if firstType == "Int" && secondType == "Int" {
+				return entry.NewSub(first.(*constant.Int), second.(*constant.Int))
+			} else if firstType == "Float" && secondType == "Float" {
+				return entry.NewFSub(first.(*constant.Float), second.(*constant.Float))
+			} else if firstType == "Int" && secondType == "Float" {
+				return entry.NewFSub(entry.NewSIToFP(first.(*constant.Int), types.Float), second.(*constant.Float))
+			} else if firstType == "Float" && secondType == "Int" {
+				return entry.NewFSub(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
+			}
+		} else if key.expr == "*" {
+			first := evalToLlvm(key.first, v, f, m, entry)
+			second := evalToLlvm(key.second, v, f, m, entry)
+			firstType := typeof(first)[10:]
+			secondType := typeof(second)[10:]
+			if firstType == "Int" && secondType == "Int" {
+				return entry.NewMul(first.(*constant.Int), second.(*constant.Int))
+			} else if firstType == "Float" && secondType == "Float" {
+				return entry.NewFMul(first.(*constant.Float), second.(*constant.Float))
+			} else if firstType == "Int" && secondType == "Float" {
+				return entry.NewFMul(entry.NewSIToFP(first.(*constant.Int), types.Float), second.(*constant.Float))
+			} else if firstType == "Float" && secondType == "Int" {
+				return entry.NewFMul(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
+			}
+		} else if key.expr == "/" {
+			first := evalToLlvm(key.first, v, f, m, entry)
+			second := evalToLlvm(key.second, v, f, m, entry)
+			firstType := typeof(first)[10:]
+			secondType := typeof(second)[10:]
+			if firstType == "Int" && secondType == "Int" {
+				return entry.NewSDiv(first.(*constant.Int), second.(*constant.Int))
+			} else if firstType == "Float" && secondType == "Float" {
+				return entry.NewFDiv(first.(*constant.Float), second.(*constant.Float))
+			} else if firstType == "Int" && secondType == "Float" {
+				return entry.NewFDiv(entry.NewSIToFP(first.(*constant.Int), types.Float), second.(*constant.Float))
+			} else if firstType == "Float" && secondType == "Int" {
+				return entry.NewFDiv(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
+			}
+		}
+	} else if typeof(expr) == "cold.Function" {
+		name := expr.(Function).name
+		//args := expr.(Function).args
+		function, exists := (*f)[name]
+		if !exists {
+			fmt.Println("Error: unrecognized function")
+			os.Exit(1)
+		}
+		return entry.NewCall(function)
+	}
+	return 0
+}
+func astToLlvm(program []any) string {
+	variables := make(map[string]any)
+	funcs := make(map[string]*ir.Func)
+	m := ir.NewModule()
+	funcs["print"] = m.NewFunc("printf", types.Void, ir.NewParam("p1", types.I8Ptr))
+	main := m.NewFunc("main", types.I32)
+	entry := main.NewBlock("entry")
+	for _, line := range program {
+		evalToLlvm(line, &variables, &funcs, m, entry)
+	}
+	entry.NewRet(constant.NewInt(types.I32, 0))
+
+	return m.String()
+}
+func runLlvm(llvm string) {
+	os.WriteFile("program.ll", []byte(llvm), 0644)
+	cmd := exec.Command("llc", "-filetype=obj", "program.ll", "-o=program.o")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+	os.Remove("program.ll")
+	cmd = exec.Command("clang", "program.o", "-oprogram")
+	cmd.Run()
+	os.Remove("program.o")
+	cmd = exec.Command("./program")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+	os.Remove("program")
+}
+func CompileAndExecute(file string) {
+	lexed, indents := lex.Lex(file)
+	parsed := parse(lexed, indents)
+	llvm := astToLlvm(parsed)
+	//fmt.Println(llvm)
+
+	runLlvm(llvm)
 }

@@ -1,13 +1,2 @@
-a = 2 * -3 + 0.1 # Set a
-
-print("a equals '") # Start printing
-print(a)
-println("'") # Use println() to demonstrate its functionality
-println("type of a: ", typeof(a))
-
-# Set a again
-a = "burger" + " with fries"
-
-# Show a better way to print
-println("a equals '", a, "'") 
-println("type of a: ", typeof(a))
+a = "AaA"
+println("23 + a = "+23+a)

@@ -10,4 +10,5 @@ func main() {
 	contentsByteArray, _ := os.ReadFile("program.cold")
 	contents := string(contentsByteArray)
 	cold.Interpret(contents)
+	cold.CompileAndExecute(contents)
 }

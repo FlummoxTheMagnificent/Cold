@@ -1,2 +1,2 @@
 a = "AaA"
-println("23 + a = "+23+a)
+println("23 + a = " +  23 + a)

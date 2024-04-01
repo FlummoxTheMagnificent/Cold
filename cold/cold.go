@@ -12,15 +12,13 @@ import (
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
 	"github.com/llir/llvm/ir/types"
+	"github.com/llir/llvm/ir/value"
 )
 
 func typeof(v any) string {
 	return fmt.Sprintf("%T", v)
 }
 
-type Token struct {
-	key string
-}
 type Expression struct {
 	first  any
 	expr   string
@@ -99,7 +97,7 @@ func format(tokens []any) []any {
 				werevalues[len(werevalues)-1] = true
 			}
 		} else if i.(lex.Token).Key == "," {
-			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "cold.Function" || queue[len(queue)-1].(Token).key != "(") {
+			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "cold.Function" || queue[len(queue)-1].(lex.Token).Key != "(") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -397,9 +395,13 @@ func Interpret(file string) {
 	parsed := parse(lexed, indents)
 	evaluate(parsed)
 }
-func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block) any {
+func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block) value.Value {
 	if typeof(expr) == "string" {
-		return constant.NewCharArrayFromString(expr.(string))
+		zero := constant.NewInt(types.I64, 0)
+		arrayType := types.NewArray(uint64(len(expr.(string))+1), types.I8)
+		charArray := entry.NewAlloca(arrayType)
+		entry.NewStore(constant.NewCharArrayFromString(expr.(string)+"\x00"), charArray)
+		return entry.NewGetElementPtr(arrayType, charArray, zero, zero)
 	} else if typeof(expr) == "float64" {
 		return constant.NewFloat(types.Float, expr.(float64))
 	} else if typeof(expr) == "int" {
@@ -465,15 +467,38 @@ func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Modul
 		}
 	} else if typeof(expr) == "cold.Function" {
 		name := expr.(Function).name
-		//args := expr.(Function).args
-		function, exists := (*f)[name]
-		if !exists {
-			fmt.Println("Error: unrecognized function")
+		args := expr.(Function).args
+		if name == "print" {
+			for _, i := range args {
+				arg := evalToLlvm(i, v, f, m, entry)
+				if arg.Type().String() != "i8*" {
+					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "i8*"+")")
+					os.Exit(1)
+				}
+				entry.NewCall((*f)["print"], arg)
+			}
+		} else if name == "println" {
+			for _, i := range args {
+				arg := evalToLlvm(i, v, f, m, entry)
+				if arg.Type().String() != "i8*" {
+					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "i8*"+")")
+					os.Exit(1)
+				}
+				entry.NewCall((*f)["print"], arg)
+			}
+			entry.NewCall((*f)["print"], evalToLlvm("\n", v, f, m, entry))
+		} else if function, exists := (*f)[name]; exists {
+			list := make([]value.Value, len(args))
+			for i, item := range args {
+				list[i] = evalToLlvm(item, v, f, m, entry)
+			}
+			return entry.NewCall(function, list...)
+		} else {
+			fmt.Println("Error: unrecognized function '" + name + "()'")
 			os.Exit(1)
 		}
-		return entry.NewCall(function)
 	}
-	return 0
+	return nil
 }
 func astToLlvm(program []any) string {
 	variables := make(map[string]any)
@@ -491,12 +516,14 @@ func astToLlvm(program []any) string {
 }
 func runLlvm(llvm string) {
 	os.WriteFile("program.ll", []byte(llvm), 0644)
-	cmd := exec.Command("llc", "-filetype=obj", "program.ll", "-o=program.o")
+	cmd := exec.Command("llc", "-filetype=obj", "program.ll", "-o=program.o", "-O3")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
 	os.Remove("program.ll")
-	cmd = exec.Command("clang", "program.o", "-oprogram")
+	cmd = exec.Command("clang", "program.o", "-oprogram", "-O3")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	cmd.Run()
 	os.Remove("program.o")
 	cmd = exec.Command("./program")

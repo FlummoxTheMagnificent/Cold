@@ -509,7 +509,6 @@ func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.
 			newvar := entry.NewAlloca(typ)
 			entry.NewStore(item, newvar)
 			(*v)[code.data] = Variable{newvar, typ}
-			return nil
 		} else {
 			fmt.Println("Error: Internal error; please report")
 			os.Exit(1)

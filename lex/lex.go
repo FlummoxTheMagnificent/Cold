@@ -12,13 +12,15 @@ type Token struct {
 }
 
 func Lex(txt string) ([][]any, []int) {
-	refloat := regexp.MustCompile(`^(\d+\.\d*)(?:[\s\)$\+\-\*/,=])`)
-	reint := regexp.MustCompile(`^(\d+)\b[^\.]`)
+	refloat := regexp.MustCompile(`^(\d+\.\d*)(?:\s\)$\+\-\*/,=)`)
+	reint := regexp.MustCompile(`^(\d+)(?:\b|$)`)
 	restr := regexp.MustCompile(`^"([^"]*)"`)
-	reid := regexp.MustCompile(`^([a-zA-Z]\w*|[\(\)\+\-\*/\=\:\.,])`)
+	reid := regexp.MustCompile(`^([a-zA-Z]\w*|(?:\(|\)|\+|-|\*|/|=|:|\.|,))`)
 	recmnt := regexp.MustCompile(`^(#[^\n]*|^'[^']*'|\s+)`)
+	retabs := regexp.MustCompile(`\t*`)
 
 	values := make([][]any, 1)
+	indents := []int{len(retabs.FindStringSubmatch(txt)[0])}
 	i := 0
 	for len(txt) > 0 {
 		match := refloat.FindStringSubmatch(txt)
@@ -47,16 +49,17 @@ func Lex(txt string) ([][]any, []int) {
 							txt = txt[1:]
 							i++
 							values = append(values, make([]any, 0))
+							indents = append(indents, len(retabs.FindStringSubmatch(txt)[0]))
 						} else {
 							match = recmnt.FindStringSubmatch(txt)
 							if match != nil {
 								txt = txt[len(match[1]):]
 							} else {
-								token := regexp.MustCompile(`^\w*`).FindStringSubmatch(txt)
+								token := regexp.MustCompile(`^\w+`).FindStringSubmatch(txt)
 								if len(token[0]) > 0 {
-									fmt.Println("Error: unrecognized '" + token[0] + "'")
+									fmt.Println("Lex error: unrecognized '" + token[0] + "'")
 								} else {
-									fmt.Println("Error: unrecognized '" + string(txt[0]) + "'")
+									fmt.Println("Lex error: unrecognized '" + string(txt[0]) + "'")
 								}
 								os.Exit(1)
 							}
@@ -66,5 +69,5 @@ func Lex(txt string) ([][]any, []int) {
 			}
 		}
 	}
-	return values, nil
+	return values, indents
 }

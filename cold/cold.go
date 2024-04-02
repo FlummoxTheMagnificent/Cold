@@ -37,6 +37,10 @@ type CodeBlock struct {
 	data string
 	code []any
 }
+type Variable struct {
+	ptr value.Value
+	typ types.Type
+}
 
 func format(tokens []any) []any {
 	// Heavily modified shunting yard algorithm
@@ -395,7 +399,7 @@ func Interpret(file string) {
 	parsed := parse(lexed, indents)
 	evaluate(parsed)
 }
-func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block) value.Value {
+func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block) value.Value {
 	if typeof(expr) == "string" {
 		zero := constant.NewInt(types.I64, 0)
 		arrayType := types.NewArray(uint64(len(expr.(string))+1), types.I8)
@@ -475,7 +479,7 @@ func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Modul
 					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "i8*"+")")
 					os.Exit(1)
 				}
-				entry.NewCall((*f)["print"], arg)
+				entry.NewCall((*f)["printf"], arg)
 			}
 		} else if name == "println" {
 			for _, i := range args {
@@ -484,9 +488,9 @@ func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Modul
 					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "i8*"+")")
 					os.Exit(1)
 				}
-				entry.NewCall((*f)["print"], arg)
+				entry.NewCall((*f)["printf"], arg)
 			}
-			entry.NewCall((*f)["print"], evalToLlvm("\n", v, f, m, entry))
+			entry.NewCall((*f)["printf"], evalToLlvm("\n", v, f, m, entry))
 		} else if function, exists := (*f)[name]; exists {
 			list := make([]value.Value, len(args))
 			for i, item := range args {
@@ -497,14 +501,30 @@ func evalToLlvm(expr any, v *map[string]any, f *map[string]*ir.Func, m *ir.Modul
 			fmt.Println("Error: unrecognized function '" + name + "()'")
 			os.Exit(1)
 		}
+	} else if typeof(expr) == "cold.CodeBlock" {
+		if expr.(CodeBlock).key == "var" {
+			code := expr.(CodeBlock)
+			item := evalToLlvm(code.code[0], v, f, m, entry)
+			typ := item.Type()
+			newvar := entry.NewAlloca(typ)
+			entry.NewStore(item, newvar)
+			(*v)[code.data] = Variable{newvar, typ}
+			return nil
+		} else {
+			fmt.Println("Error: Internal error; please report")
+			os.Exit(1)
+		}
+	} else if typeof(expr) == "cold.Keyword" {
+		variable := (*v)[expr.(Keyword).key]
+		return entry.NewLoad(variable.typ, variable.ptr)
 	}
 	return nil
 }
 func astToLlvm(program []any) string {
-	variables := make(map[string]any)
+	variables := make(map[string]Variable)
 	funcs := make(map[string]*ir.Func)
 	m := ir.NewModule()
-	funcs["print"] = m.NewFunc("printf", types.Void, ir.NewParam("p1", types.I8Ptr))
+	funcs["printf"] = m.NewFunc("printf", types.Void, ir.NewParam("p1", types.I8Ptr))
 	main := m.NewFunc("main", types.I32)
 	entry := main.NewBlock("entry")
 	for _, line := range program {

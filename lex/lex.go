@@ -15,7 +15,7 @@ func Lex(txt string) ([][]any, []int) {
 	refloat := regexp.MustCompile(`^(\d+\.\d*)(?:\b|$)`)
 	reint := regexp.MustCompile(`^(\d+)(?:\b|$)`)
 	restr := regexp.MustCompile(`^"([^"]*)"`)
-	reid := regexp.MustCompile(`^([a-zA-Z]\w*|(?:\(|\)|\+|-|\*|/|=|:|\.|,))`)
+	reid := regexp.MustCompile(`^([a-zA-Z]\w*|(?:\(|\)|\+|-|\*|/|=|:=|:|\.|,))`)
 	recmnt := regexp.MustCompile(`^(#[^\n]*|^'[^']*'|\s+)`)
 	retabs := regexp.MustCompile(`\t*`)
 
@@ -46,10 +46,11 @@ func Lex(txt string) ([][]any, []int) {
 						txt = txt[len(match[1]):]
 					} else {
 						if txt[0] == '\n' {
-							txt = txt[1:]
+							indent := len(retabs.FindStringSubmatch(txt[1:])[0])
+							txt = txt[indent+1:]
 							i++
 							values = append(values, make([]any, 0))
-							indents = append(indents, len(retabs.FindStringSubmatch(txt)[0]))
+							indents = append(indents, indent)
 						} else {
 							match = recmnt.FindStringSubmatch(txt)
 							if match != nil {

@@ -46,11 +46,16 @@ func Lex(txt string) ([][]any, []int) {
 						txt = txt[len(match[1]):]
 					} else {
 						if txt[0] == '\n' {
-							indent := len(retabs.FindStringSubmatch(txt[1:])) - 1
-							txt = txt[indent+1:]
-							i++
-							values = append(values, make([]any, 0))
-							indents = append(indents, indent)
+							if len(txt) > 1 {
+								indent := len(retabs.FindStringSubmatch(txt[1:])) - 1
+								txt = txt[indent:]
+								values = append(values, make([]any, 0))
+								indents = append(indents, indent)
+								i++
+							} else {
+								indents = append(indents, 0)
+								txt = ""
+							}
 						} else {
 							match = recmnt.FindStringSubmatch(txt)
 							if match != nil {

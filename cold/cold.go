@@ -10,6 +10,7 @@ import (
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
+	"github.com/llir/llvm/ir/enum"
 	"github.com/llir/llvm/ir/types"
 	"github.com/llir/llvm/ir/value"
 )
@@ -142,7 +143,7 @@ func format(tokens []any) []any {
 				argcount = argcount[:len(argcount)-1]
 				output = append(output, f)
 			}
-		} else if i.(lex.Token).Key == "+" || i.(lex.Token).Key == "-" {
+		} else if i.(lex.Token).Key == "+" || i.(lex.Token).Key == "-" || i.(lex.Token).Key == "=" {
 			if isexpr {
 				if i.(lex.Token).Key == "-" && !negate {
 					negate = true
@@ -152,7 +153,7 @@ func format(tokens []any) []any {
 					os.Exit(1)
 				}
 			}
-			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/" || queue[len(queue)-1].(lex.Token).Key == "+" || queue[len(queue)-1].(lex.Token).Key == "-") {
+			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/" || queue[len(queue)-1].(lex.Token).Key == "+" || queue[len(queue)-1].(lex.Token).Key == "-" || queue[len(queue)-1] == "=") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -192,7 +193,7 @@ func parseexpr(expr []any) any {
 	for _, x := range expr {
 		if typeof(x) == "lex.Token" {
 			key := x.(lex.Token).Key
-			if key == "+" || key == "-" || key == "*" || key == "/" {
+			if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" {
 				if len(values) < 2 {
 					fmt.Println("Error: missing argument for", key)
 					os.Exit(1)
@@ -219,23 +220,60 @@ func parseexpr(expr []any) any {
 	}
 	return values[0]
 }
-func parse(program [][]any, _ []int) []any {
+func parse(program [][]any, indents []int) []any {
 	var lines []any
-	for _, line := range program {
-		if line == nil {
+	i := 0
+	for i < len(program) {
+		line := program[i]
+		if len(line) == 0 {
+			i++
 			continue
 		}
 		if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "=" {
 			lines = append(lines, CodeBlock{"setvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
 		} else if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == ":=" {
 			lines = append(lines, CodeBlock{"newvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
+		} else if typeof(line[0]) == "lex.Token" && line[0].(lex.Token).Key == "if" {
+			if len(line) < 3 {
+				if len(line) == 2 {
+					if typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == ":" {
+						fmt.Println("Error: expected condition in 'if' statement")
+					} else {
+						fmt.Println("Error: missing ':' in 'if' statement")
+					}
+				} else {
+					fmt.Println("Error: unexpected 'if'")
+				}
+				os.Exit(1)
+			}
+			last := line[len(line)-1]
+			if typeof(last) == "lex.Token" && last.(lex.Token).Key == ":" {
+				var toParse [][]any
+				start := i
+				i++
+				for i < len(program) && indents[i] > indents[start] {
+					toParse = append(toParse, program[i])
+					i++
+				}
+				lines = append(line, CodeBlock{"if", "", append([]any{parseexpr(line[1 : len(line)-1])}, parse(toParse, indents[start+1:i]))})
+				i--
+			} else {
+				fmt.Println("Error: expected ':' in 'if' statement")
+				os.Exit(1)
+			}
 		} else {
 			lines = append(lines, parseexpr(line))
 		}
+		i++
 	}
 	return lines
 }
-func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block) value.Value {
+func parseToLlvm(program []any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) {
+	for _, line := range program {
+		eval(line, v, f, m, entry, main)
+	}
+}
+func eval(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) value.Value {
 	if typeof(expr) == "string" {
 		zero := constant.NewInt(types.I64, 0)
 		arrayType := types.NewArray(uint64(len(expr.(string))+1), types.I8)
@@ -249,22 +287,24 @@ func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.
 	} else if typeof(expr) == "cold.Expression" {
 		key := expr.(Expression)
 		if key.expr == "+" {
-			first := evalToLlvm(key.first, v, f, m, entry)
-			second := evalToLlvm(key.second, v, f, m, entry)
-			firstType := typeof(first)[10:]
-			secondType := typeof(second)[10:]
-			if firstType == "Int" && secondType == "Int" {
+			first := eval(key.first, v, f, m, entry, main)
+			second := eval(key.second, v, f, m, entry, main)
+			firstType := typeof(first)
+			secondType := typeof(second)
+			if firstType == "*constant.Int" && secondType == "*constant.Int" {
 				return entry.NewAdd(first.(*constant.Int), second.(*constant.Int))
-			} else if firstType == "Float" && secondType == "Float" {
+			} else if firstType == "*constant.Float" && secondType == "*constant.Float" {
 				return entry.NewFAdd(first.(*constant.Float), second.(*constant.Float))
-			} else if firstType == "Int" && secondType == "Float" {
+			} else if firstType == "*constant.Int" && secondType == "*constant.Float" {
 				return entry.NewFAdd(entry.NewSIToFP(first.(*constant.Int), types.Float), second.(*constant.Float))
-			} else if firstType == "Float" && secondType == "Int" {
+			} else if firstType == "*constant.Float" && secondType == "*constant.Int" {
 				return entry.NewFAdd(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
+			} else if firstType == "*ir.InstGetElementPtr" && secondType == "*ir.InstGetElementPtr" {
+				return entry.NewCall((*f)["strcat"], first.(*ir.InstGetElementPtr), second.(*ir.InstGetElementPtr))
 			}
 		} else if key.expr == "-" {
-			first := evalToLlvm(key.first, v, f, m, entry)
-			second := evalToLlvm(key.second, v, f, m, entry)
+			first := eval(key.first, v, f, m, entry, main)
+			second := eval(key.second, v, f, m, entry, main)
 			firstType := typeof(first)[10:]
 			secondType := typeof(second)[10:]
 			if firstType == "Int" && secondType == "Int" {
@@ -277,8 +317,8 @@ func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.
 				return entry.NewFSub(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
 			}
 		} else if key.expr == "*" {
-			first := evalToLlvm(key.first, v, f, m, entry)
-			second := evalToLlvm(key.second, v, f, m, entry)
+			first := eval(key.first, v, f, m, entry, main)
+			second := eval(key.second, v, f, m, entry, main)
 			firstType := typeof(first)[10:]
 			secondType := typeof(second)[10:]
 			if firstType == "Int" && secondType == "Int" {
@@ -291,8 +331,8 @@ func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.
 				return entry.NewFMul(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
 			}
 		} else if key.expr == "/" {
-			first := evalToLlvm(key.first, v, f, m, entry)
-			second := evalToLlvm(key.second, v, f, m, entry)
+			first := eval(key.first, v, f, m, entry, main)
+			second := eval(key.second, v, f, m, entry, main)
 			firstType := typeof(first)[10:]
 			secondType := typeof(second)[10:]
 			if firstType == "Int" && secondType == "Int" {
@@ -304,39 +344,60 @@ func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.
 			} else if firstType == "Float" && secondType == "Int" {
 				return entry.NewFDiv(first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
 			}
+		} else if key.expr == "=" {
+			first := eval(key.first, v, f, m, entry, main)
+			second := eval(key.second, v, f, m, entry, main)
+			firstType := typeof(first)[10:]
+			secondType := typeof(second)[10:]
+			if firstType == "Int" && secondType == "Int" {
+				return entry.NewICmp(enum.IPredEQ, first.(*constant.Int), second.(*constant.Int))
+			} else if firstType == "Float" && secondType == "Float" {
+				return entry.NewICmp(enum.IPred(enum.FPredOEQ), first.(*constant.Float), second.(*constant.Float))
+			} else if firstType == "Int" && secondType == "Float" {
+				return entry.NewICmp(enum.IPred(enum.FPredOEQ), entry.NewSIToFP(first.(*constant.Int), types.Float), second.(*constant.Float))
+			} else if firstType == "Float" && secondType == "Int" {
+				return entry.NewICmp(enum.IPred(enum.FPredOEQ), first.(*constant.Float), entry.NewSIToFP(second.(*constant.Int), types.Float))
+			}
 		}
 	} else if typeof(expr) == "cold.Function" {
 		name := expr.(Function).name
 		args := expr.(Function).args
 		if name == "print" {
+			var arg value.Value
+			arg = constant.NewCharArray(nil)
 			for _, i := range args {
-				arg := evalToLlvm(i, v, f, m, entry)
-				if arg.Type().String() != "i8*" {
+				this := eval(i, v, f, m, entry, main)
+				if this.Type().String() != "i8*" {
 					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "string"+")")
 					os.Exit(1)
 				}
-				entry.NewCall((*f)["printf"], arg)
+				arg = entry.NewCall((*f)["strcat"], arg, this)
 			}
 		} else if name == "println" {
-			for _, i := range args {
-				arg := evalToLlvm(i, v, f, m, entry)
-				if arg.Type().String() != "i8*" {
-					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "i8*"+")")
+			if len(args) == 0 {
+				return nil
+			}
+			arg := eval(args[0], v, f, m, entry, main)
+			for _, i := range args[1:] {
+				this := eval(i, v, f, m, entry, main)
+				if this.Type().String() != "i8*" {
+					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "string"+")")
 					os.Exit(1)
 				}
-				entry.NewCall((*f)["printf"], arg)
+				arg = entry.NewCall((*f)["strcat"], arg, this)
 			}
-			entry.NewCall((*f)["printf"], evalToLlvm("\n", v, f, m, entry))
+			arg = entry.NewCall((*f)["strcat"], arg, eval("\n", v, f, m, entry, main))
+			entry.NewCall((*f)["printf"], arg)
 		} else if name == "typeof" {
 			if len(args) != 1 {
 				fmt.Println("Error: wrong argument count for typeof()")
 				os.Exit(1)
 			}
-			return evalToLlvm(evalToLlvm(args[0], v, f, m, entry).Type().String(), v, f, m, entry)
+			return eval(eval(args[0], v, f, m, entry, main).Type().String(), v, f, m, entry, main)
 		} else if function, exists := (*f)[name]; exists {
 			list := make([]value.Value, len(args))
 			for i, item := range args {
-				list[i] = evalToLlvm(item, v, f, m, entry)
+				list[i] = eval(item, v, f, m, entry, main)
 			}
 			return entry.NewCall(function, list...)
 		} else {
@@ -350,7 +411,7 @@ func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.
 				fmt.Println("Error: use of undeclared", code.data)
 				os.Exit(1)
 			}
-			item := evalToLlvm(code.code[0], v, f, m, entry)
+			item := eval(code.code[0], v, f, m, entry, main)
 			typ := item.Type()
 			newvar := entry.NewAlloca(typ)
 			entry.NewStore(item, newvar)
@@ -361,11 +422,16 @@ func evalToLlvm(expr any, v *map[string]Variable, f *map[string]*ir.Func, m *ir.
 				fmt.Println("Error: already declared", code.data)
 				os.Exit(1)
 			}
-			item := evalToLlvm(code.code[0], v, f, m, entry)
+			item := eval(code.code[0], v, f, m, entry, main)
 			typ := item.Type()
 			newvar := entry.NewAlloca(typ)
 			entry.NewStore(item, newvar)
 			(*v)[code.data] = Variable{newvar, typ}
+		} else if expr.(CodeBlock).key == "if" {
+			code := expr.(CodeBlock)
+			//cond := eval(code.code[0], v, f, m, entry, main)
+			then := main.NewBlock("")
+			parseToLlvm(code.code[1:], v, f, m, then, main)
 		}
 	} else if typeof(expr) == "cold.Keyword" {
 		variable := (*v)[expr.(Keyword).key]
@@ -378,10 +444,11 @@ func astToLlvm(program []any) string {
 	funcs := make(map[string]*ir.Func)
 	m := ir.NewModule()
 	funcs["printf"] = m.NewFunc("printf", types.Void, ir.NewParam("p1", types.I8Ptr))
+	funcs["strcat"] = m.NewFunc("strcat", types.I8Ptr, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I8Ptr))
 	main := m.NewFunc("main", types.I32)
-	entry := main.NewBlock("entry")
+	entry := main.NewBlock("")
 	for _, line := range program {
-		evalToLlvm(line, &variables, &funcs, m, entry)
+		eval(line, &variables, &funcs, m, entry, main)
 	}
 	entry.NewRet(constant.NewInt(types.I32, 0))
 

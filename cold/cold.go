@@ -19,149 +19,133 @@ func typeof(item any) string {
 	return fmt.Sprintf("%T", item)
 }
 
-type Expression struct {
-	first  any
-	expr   string
-	second any
-}
-type Function struct {
-	name     string
-	args     []any
-	argcount int
-}
-type Keyword struct {
-	key string
-}
-type CodeBlock struct {
-	key  string
-	data string
-	code []any
-}
-type Variable struct {
-	ptr Value
-	typ types.Type
-}
-type Value struct {
+type val struct {
 	typ   types.Type
 	ptr   value.Value
 	isarr bool
 	len   uint64
 }
 
-func (val Value) Type() types.Type {
-	return val.typ
+func (v val) Type() types.Type {
+	return v.typ
 }
-func (val Value) Ident() string {
-	return val.ptr.Ident()
+func (v val) Ident() string {
+	return v.ptr.Ident()
 }
-func (val Value) String() string {
-	return val.ptr.String()
+func (v val) String() string {
+	return v.ptr.String()
 }
 
-func parseToLlvm(program []any, v *map[string]Value, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) {
+func parseToLlvm(program []any, v *map[string]val, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) {
 	for _, line := range program {
 		eval(line, v, f, m, entry, main)
 	}
 }
-func eval(expr any, v *map[string]Value, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) Value {
+func strJoin(first val, second val, entry *ir.Block, f *map[string]*ir.Func) val {
+	len := first.len + second.len
+	zero := constant.NewInt(types.I64, 0)
+	arrayType := types.NewArray(len, types.I8)
+	charArray := entry.NewAlloca(arrayType)
+	entry.NewStore(constant.NewCharArray(make([]byte, len)), charArray)
+
+	blank := val{types.I8Ptr, entry.NewGetElementPtr(arrayType, charArray, zero, zero), true, len}
+	firstExtended := entry.NewCall((*f)["strcat"], blank, first.ptr)
+
+	joined := entry.NewCall((*f)["strcat"], firstExtended, second.ptr)
+	return val{types.I8Ptr, joined, true, len}
+}
+func eval(expr any, v *map[string]val, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) val {
 	if typeof(expr) == "string" {
 		zero := constant.NewInt(types.I64, 0)
 		arrayType := types.NewArray(uint64(len(expr.(string))+1), types.I8)
 		charArray := entry.NewAlloca(arrayType)
 		entry.NewStore(constant.NewCharArrayFromString(expr.(string)+"\x00"), charArray)
-		return Value{types.I8Ptr, entry.NewGetElementPtr(arrayType, charArray, zero, zero), true, uint64(len(expr.(string)) + 1)}
+		return val{types.I8Ptr, entry.NewGetElementPtr(arrayType, charArray, zero, zero), true, uint64(len(expr.(string)) + 1)}
 	} else if typeof(expr) == "float64" {
-		return Value{types.Float, constant.NewFloat(types.Float, expr.(float64)), false, 0}
+		return val{types.Float, constant.NewFloat(types.Float, expr.(float64)), false, 0}
 	} else if typeof(expr) == "int" {
-		return Value{types.I64, constant.NewInt(types.I64, int64(expr.(int))), false, 0}
-	} else if typeof(expr) == "cold.Expression" {
-		key := expr.(Expression)
-		if key.expr == "+" {
-			first := eval(key.first, v, f, m, entry, main)
-			second := eval(key.second, v, f, m, entry, main)
-			firstType := first.Type().String()
-			secondType := second.Type().String()
+		return val{types.I64, constant.NewInt(types.I64, int64(expr.(int))), false, 0}
+	} else if typeof(expr) == "parse.Expression" {
+		key := expr.(parse.Expression)
+		if key.Expr == "+" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
+			firstType := first.typ.String()
+			secondType := second.typ.String()
 			if firstType == "i64" && secondType == "i64" {
-				return Value{types.I64, entry.NewAdd(first, second), false, 0}
+				return val{types.I64, entry.NewAdd(first, second), false, 0}
 			} else if firstType == "float" && secondType == "float" {
-				return Value{types.Float, entry.NewFAdd(first, second), false, 0}
+				return val{types.Float, entry.NewFAdd(first, second), false, 0}
 			} else if firstType == "i64" && secondType == "float" {
-				return Value{types.Float, entry.NewFAdd(entry.NewSIToFP(first, types.Float), second), false, 0}
+				return val{types.Float, entry.NewFAdd(entry.NewSIToFP(first, types.Float), second), false, 0}
 			} else if firstType == "float" && secondType == "i64" {
-				return Value{types.Float, entry.NewFAdd(first, entry.NewSIToFP(second, types.Float)), false, 0}
+				return val{types.Float, entry.NewFAdd(first, entry.NewSIToFP(second, types.Float)), false, 0}
 			} else if firstType == "i8*" && secondType == "i8*" {
-				zero := constant.NewInt(types.I64, 0)
-				len := first.len + second.len
-				blank := eval(make([]byte, len), v, f, m, entry, main)
-				first_long := entry.NewCall((*f)["strcat"], blank, first.ptr)
-				firstPtr := entry.NewGetElementPtr(types.NewArray(len, types.I8), first_long, zero, zero)
-				joined := entry.NewCall((*f)["strcat"], firstPtr, second.ptr)
-				joinedPtr := entry.NewGetElementPtr(types.NewArray(len, types.I8), joined, zero, zero)
-				return Value{types.I8Ptr, joinedPtr, true, len}
+				return strJoin(first, second, entry, f)
 			}
-		} else if key.expr == "-" {
-			first := eval(key.first, v, f, m, entry, main)
-			second := eval(key.second, v, f, m, entry, main)
+		} else if key.Expr == "-" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
 			firstType := typeof(first)[10:]
 			secondType := typeof(second)[10:]
 			if firstType == "i64" && secondType == "i64" {
-				return Value{types.I64, entry.NewSub(first, second), false, 0}
+				return val{types.I64, entry.NewSub(first, second), false, 0}
 			} else if firstType == "float" && secondType == "float" {
-				return Value{types.Float, entry.NewFSub(first, second), false, 0}
+				return val{types.Float, entry.NewFSub(first, second), false, 0}
 			} else if firstType == "i64" && secondType == "float" {
-				return Value{types.Float, entry.NewFSub(entry.NewSIToFP(first, types.Float), second), false, 0}
+				return val{types.Float, entry.NewFSub(entry.NewSIToFP(first, types.Float), second), false, 0}
 			} else if firstType == "float" && secondType == "i64" {
-				return Value{types.Float, entry.NewFSub(first, entry.NewSIToFP(second, types.Float)), false, 0}
+				return val{types.Float, entry.NewFSub(first, entry.NewSIToFP(second, types.Float)), false, 0}
 			}
-		} else if key.expr == "*" {
-			first := eval(key.first, v, f, m, entry, main)
-			second := eval(key.second, v, f, m, entry, main)
+		} else if key.Expr == "*" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
 			firstType := typeof(first)[10:]
 			secondType := typeof(second)[10:]
 			if firstType == "i64" && secondType == "i64" {
-				return Value{types.I64, entry.NewMul(first, second), false, 0}
+				return val{types.I64, entry.NewMul(first, second), false, 0}
 			} else if firstType == "float" && secondType == "float" {
-				return Value{types.Float, entry.NewFMul(first, second), false, 0}
+				return val{types.Float, entry.NewFMul(first, second), false, 0}
 			} else if firstType == "i64" && secondType == "float" {
-				return Value{types.Float, entry.NewFMul(entry.NewSIToFP(first, types.Float), second), false, 0}
+				return val{types.Float, entry.NewFMul(entry.NewSIToFP(first, types.Float), second), false, 0}
 			} else if firstType == "float" && secondType == "i64" {
-				return Value{types.Float, entry.NewFMul(first, entry.NewSIToFP(second, types.Float)), false, 0}
+				return val{types.Float, entry.NewFMul(first, entry.NewSIToFP(second, types.Float)), false, 0}
 			}
-		} else if key.expr == "/" {
-			first := eval(key.first, v, f, m, entry, main)
-			second := eval(key.second, v, f, m, entry, main)
+		} else if key.Expr == "/" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
 			firstType := typeof(first)[10:]
 			secondType := typeof(second)[10:]
 			if firstType == "i64" && secondType == "i64" {
-				return Value{types.I64, entry.NewSDiv(first, second), false, 0}
+				return val{types.I64, entry.NewSDiv(first, second), false, 0}
 			} else if firstType == "float" && secondType == "float" {
-				return Value{types.Float, entry.NewFDiv(first, second), false, 0}
+				return val{types.Float, entry.NewFDiv(first, second), false, 0}
 			} else if firstType == "i64" && secondType == "float" {
-				return Value{types.Float, entry.NewFDiv(entry.NewSIToFP(first, types.Float), second), false, 0}
+				return val{types.Float, entry.NewFDiv(entry.NewSIToFP(first, types.Float), second), false, 0}
 			} else if firstType == "float" && secondType == "i64" {
-				return Value{types.Float, entry.NewFDiv(first, entry.NewSIToFP(second, types.Float)), false, 0}
+				return val{types.Float, entry.NewFDiv(first, entry.NewSIToFP(second, types.Float)), false, 0}
 			}
-		} else if key.expr == "=" {
-			first := eval(key.first, v, f, m, entry, main)
-			second := eval(key.second, v, f, m, entry, main)
+		} else if key.Expr == "=" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
 			firstType := typeof(first)[10:]
 			secondType := typeof(second)[10:]
 			if firstType == "Int" && secondType == "Int" {
-				return Value{types.I64, entry.NewICmp(enum.IPredEQ, first, second), false, 0}
+				return val{types.I64, entry.NewICmp(enum.IPredEQ, first, second), false, 0}
 			} else if firstType == "Float" && secondType == "Float" {
-				return Value{types.Float, entry.NewICmp(enum.IPred(enum.FPredOEQ), first, second), false, 0}
+				return val{types.Float, entry.NewICmp(enum.IPred(enum.FPredOEQ), first, second), false, 0}
 			} else if firstType == "Int" && secondType == "Float" {
-				return Value{types.Float, entry.NewICmp(enum.IPred(enum.FPredOEQ), first, second), false, 0}
+				return val{types.Float, entry.NewICmp(enum.IPred(enum.FPredOEQ), first, second), false, 0}
 			} else if firstType == "Float" && secondType == "Int" {
-				return Value{types.Float, entry.NewICmp(enum.IPred(enum.FPredOEQ), first, second), false, 0}
+				return val{types.Float, entry.NewICmp(enum.IPred(enum.FPredOEQ), first, second), false, 0}
 			}
 		}
-	} else if typeof(expr) == "cold.Function" {
-		name := expr.(Function).name
-		args := expr.(Function).args
+	} else if typeof(expr) == "parse.Function" {
+		name := expr.(parse.Function).Name
+		args := expr.(parse.Function).Args
 		if name == "print" {
 			if len(args) == 0 {
-				return Value{}
+				return val{}
 			}
 			arg := eval(args[0], v, f, m, entry, main)
 			for _, i := range args[1:] {
@@ -170,12 +154,12 @@ func eval(expr any, v *map[string]Value, f *map[string]*ir.Func, m *ir.Module, e
 					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "string"+")")
 					os.Exit(1)
 				}
-				arg = Value{types.NewArray(arg.len+this.len, arg.typ), entry.NewCall((*f)["strcat"], entry.NewCall((*f)["strcat"], eval(string(make([]byte, arg.len+this.len)), v, f, m, entry, main), arg), this), true, arg.len + this.len}
+				arg = strJoin(arg, this, entry, f)
 			}
 			entry.NewCall((*f)["print"], arg)
 		} else if name == "println" {
 			if len(args) == 0 {
-				return Value{}
+				return val{}
 			}
 			arg := eval(args[0], v, f, m, entry, main)
 			for _, i := range args[1:] {
@@ -184,9 +168,16 @@ func eval(expr any, v *map[string]Value, f *map[string]*ir.Func, m *ir.Module, e
 					fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "string"+")")
 					os.Exit(1)
 				}
-				arg = Value{types.NewArray(arg.len+this.len, arg.typ), entry.NewCall((*f)["strcat"], entry.NewCall((*f)["strcat"], eval(string(make([]byte, arg.len+this.len)), v, f, m, entry, main), arg), this), true, arg.len + this.len}
+				arg = strJoin(arg, this, entry, f)
 			}
-			arg = Value{types.NewArray(arg.len+2, arg.typ), entry.NewCall((*f)["strcat"], entry.NewCall((*f)["strcat"], eval(string(make([]byte, arg.len+2)), v, f, m, entry, main), arg), eval("\n\x00", v, f, m, entry, main)), true, arg.len + 2}
+
+			zero := constant.NewInt(types.I64, 0)
+			arrayType := types.NewArray(2, types.I8)
+			charArray := entry.NewAlloca(arrayType)
+			entry.NewStore(constant.NewCharArrayFromString("\n\x00"), charArray)
+			str := val{types.I8Ptr, entry.NewGetElementPtr(arrayType, charArray, zero, zero), true, 2}
+
+			arg = strJoin(arg, str, entry, f)
 			entry.NewCall((*f)["print"], arg)
 		} else if name == "typeof" {
 			if len(args) != 1 {
@@ -199,60 +190,59 @@ func eval(expr any, v *map[string]Value, f *map[string]*ir.Func, m *ir.Module, e
 			for i, item := range args {
 				list[i] = eval(item, v, f, m, entry, main)
 			}
-			return Value{function.Sig.RetType, entry.NewCall(function, list...), false, 0}
+			return val{function.Sig.RetType, entry.NewCall(function, list...), false, 0}
 		} else {
 			fmt.Println("Error: unrecognized function '" + name + "()'")
 			os.Exit(1)
 		}
-	} else if typeof(expr) == "cold.CodeBlock" {
-		if expr.(CodeBlock).key == "setvar" {
-			code := expr.(CodeBlock)
-			if _, exists := (*v)[code.data]; !exists {
-				fmt.Println("Error: use of undeclared", code.data)
+	} else if typeof(expr) == "parse.CodeBlock" {
+		if expr.(parse.CodeBlock).Key == "setvar" {
+			code := expr.(parse.CodeBlock)
+			prev, exists := (*v)[code.Data]
+			if !exists {
+				fmt.Println("Error: use of undeclared", code.Data)
 				os.Exit(1)
 			}
-			item := eval(code.code[0], v, f, m, entry, main)
+			item := eval(code.Code[0], v, f, m, entry, main)
 			typ := item.Type()
-			prev := (*v)[code.data]
 			if !typ.Equal(prev.typ) {
-				fmt.Println("Error: wrong value type for", code.data, "(expected", prev.typ.String(), "but received", typ.String()+")")
+				fmt.Println("Error: wrong value type for", code.Data, "(expected", prev.typ.String(), "but received", typ.String()+")")
 				os.Exit(1)
 			}
 			entry.NewStore(item, prev.ptr)
-		} else if expr.(CodeBlock).key == "newvar" {
-			code := expr.(CodeBlock)
-			if _, exists := (*v)[code.data]; exists {
-				fmt.Println("Error: already declared", code.data)
+		} else if expr.(parse.CodeBlock).Key == "newvar" {
+			code := expr.(parse.CodeBlock)
+			if _, exists := (*v)[code.Data]; exists {
+				fmt.Println("Error: already declared", code.Data)
 				os.Exit(1)
 			}
-			item := eval(code.code[0], v, f, m, entry, main)
+			item := eval(code.Code[0], v, f, m, entry, main)
 			typ := item.Type()
 			newvar := entry.NewAlloca(typ)
 			entry.NewStore(item, newvar)
-			(*v)[code.data] = Value{typ, newvar, false, 0}
-		} else if expr.(CodeBlock).key == "if" {
-			code := expr.(CodeBlock)
+			(*v)[code.Data] = val{typ, newvar, item.isarr, item.len}
+		} else if expr.(parse.CodeBlock).Key == "if" {
+			code := expr.(parse.CodeBlock)
 			//cond := eval(code.code[0], v, f, m, entry, main)
 			then := main.NewBlock("")
-			parseToLlvm(code.code[1:], v, f, m, then, main)
+			parseToLlvm(code.Code[1:], v, f, m, then, main)
 		}
-	} else if typeof(expr) == "cold.Keyword" {
-		variable, exists := (*v)[expr.(Keyword).key]
+	} else if typeof(expr) == "parse.Keyword" {
+		variable, exists := (*v)[expr.(parse.Keyword).Key]
 		if !exists {
-			fmt.Println("Error: use of undeclared", expr.(Keyword).key)
+			fmt.Println("Error: use of undeclared", expr.(parse.Keyword).Key)
 			os.Exit(1)
 		}
-		return Value{variable.typ, entry.NewLoad(variable.typ, variable.ptr), false, 0}
+		return val{variable.typ, entry.NewLoad(variable.typ, variable.ptr), variable.isarr, variable.len}
 	}
-	return Value{}
+	return val{}
 }
 func builtinFuncs(f *map[string]*ir.Func, m *ir.Module) {
 	(*f)["print"] = m.NewFunc("printf", types.Void, ir.NewParam("p1", types.I8Ptr))
 	(*f)["strcat"] = m.NewFunc("strcat", types.I8Ptr, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I8Ptr))
-	(*f)["strlen"] = m.NewFunc("strlen", types.I64, ir.NewParam("p1", types.I8Ptr))
 }
 func astToLlvm(program []any) string {
-	variables := make(map[string]Value)
+	variables := make(map[string]val)
 	funcs := make(map[string]*ir.Func)
 	m := ir.NewModule()
 	builtinFuncs(&funcs, m)
@@ -284,12 +274,10 @@ func runLlvm(llvm string) {
 	os.Remove("program")
 }
 func CompileAndExecute(file string) {
-	//a := Array{nil, }
 	lexed, indents := lex.Lex(file)
 	parsed := parse.Parse(lexed, indents)
-	fmt.Println(parsed)
 	llvm := astToLlvm(parsed)
-	fmt.Println(llvm)
+	// fmt.Println(llvm)
 
 	runLlvm(llvm)
 }
@@ -310,7 +298,6 @@ func Compile(file string) {
 	lexed, indents := lex.Lex(file)
 	parsed := parse.Parse(lexed, indents)
 	llvm := astToLlvm(parsed)
-	//fmt.Println(llvm)
 
 	compileLlvm(llvm)
 }

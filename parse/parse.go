@@ -12,28 +12,28 @@ func typeof(item any) string {
 	return fmt.Sprintf("%T", item)
 }
 
-type expression struct {
-	first  any
-	expr   string
-	second any
+type Expression struct {
+	First  any
+	Expr   string
+	Second any
 }
-type function struct {
-	name     string
-	args     []any
+type Function struct {
+	Name     string
+	Args     []any
 	argcount int
 }
-type keyword struct {
-	key string
+type Keyword struct {
+	Key string
 }
-type codeBlock struct {
-	key  string
-	data string
-	code []any
+type CodeBlock struct {
+	Key  string
+	Data string
+	Code []any
 }
 
 func format(tokens []any) []any {
 	// Heavily modified shunting yard algorithm
-	// Partially from https://blog.kallisti.net.nz/2008/02/extension-to-the-shunting-yard-algorithm-to-allow-variable-numbers-of-arguments-to-functions/
+	// Partially from https://blog.kallisti.net.nz/2008/02/extension-to-the-shunting-yard-algorithm-to-allow-variable-numbers-of-arguments-to-Functions/
 	var output []any
 	var queue []any
 	var werevalues []bool
@@ -45,7 +45,7 @@ func format(tokens []any) []any {
 	for _, i := range tokens {
 		if prev != "" {
 			if typeof(i) == "lex.Token" && i.(lex.Token).Key == "(" {
-				queue = append(queue, function{prev, []any{}, 0})
+				queue = append(queue, Function{prev, []any{}, 0})
 				argcount = append(argcount, 0)
 				if len(werevalues) > 0 {
 					werevalues[len(werevalues)-1] = true
@@ -57,7 +57,7 @@ func format(tokens []any) []any {
 					os.Exit(1)
 				}
 				negate = false
-				output = append(output, keyword{prev})
+				output = append(output, Keyword{prev})
 				isexpr = false
 				if len(werevalues) > 0 {
 					werevalues[len(werevalues)-1] = true
@@ -90,7 +90,7 @@ func format(tokens []any) []any {
 				werevalues[len(werevalues)-1] = true
 			}
 		} else if i.(lex.Token).Key == "," {
-			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "parse.function" || queue[len(queue)-1].(lex.Token).Key != "(") {
+			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "parse.Function" || queue[len(queue)-1].(lex.Token).Key != "(") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -111,7 +111,7 @@ func format(tokens []any) []any {
 				os.Exit(1)
 			}
 			for {
-				if typeof(queue[len(queue)-1]) != "parse.function" && queue[len(queue)-1].(lex.Token).Key == "(" {
+				if typeof(queue[len(queue)-1]) != "parse.Function" && queue[len(queue)-1].(lex.Token).Key == "(" {
 					queue = queue[:len(queue)-1]
 					break
 				} else if len(queue) == 1 {
@@ -121,8 +121,8 @@ func format(tokens []any) []any {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
-			if typeof(queue[len(queue)-1]) == "parse.function" {
-				f := queue[len(queue)-1].(function)
+			if typeof(queue[len(queue)-1]) == "parse.Function" {
+				f := queue[len(queue)-1].(Function)
 				queue = queue[:len(queue)-1]
 				if werevalues[len(werevalues)-1] {
 					f.argcount = argcount[len(argcount)-1] + 1
@@ -160,7 +160,7 @@ func format(tokens []any) []any {
 			isexpr = true
 		} else {
 			if !isexpr {
-				fmt.Println("Error: unexpected", i, "(expected expression)")
+				fmt.Println("Error: unexpected", i, "(expected Expression)")
 				os.Exit(1)
 			}
 			prev = i.(lex.Token).Key
@@ -187,13 +187,13 @@ func parseexpr(expr []any) any {
 					fmt.Println("Error: missing argument for", key)
 					os.Exit(1)
 				}
-				values = append(values[:len(values)-2], expression{values[len(values)-2], key, values[len(values)-1]})
+				values = append(values[:len(values)-2], Expression{values[len(values)-2], key, values[len(values)-1]})
 			} else {
 				values = append(values, key)
 			}
-		} else if typeof(x) == "parse.function" {
-			f := x.(function)
-			f.args = slices.Clone(values[len(values)-f.argcount:])
+		} else if typeof(x) == "parse.Function" {
+			f := x.(Function)
+			f.Args = slices.Clone(values[len(values)-f.argcount:])
 			values = append(values[:len(values)-f.argcount], f)
 		} else {
 			values = append(values, x)
@@ -201,9 +201,9 @@ func parseexpr(expr []any) any {
 	}
 	if len(values) != 1 {
 		if len(values) == 0 {
-			fmt.Println("Error: missing expression")
+			fmt.Println("Error: missing Expression")
 		} else {
-			fmt.Println("Error: failed to parse expression")
+			fmt.Println("Error: failed to parse Expression")
 		}
 		os.Exit(1)
 	}
@@ -219,9 +219,9 @@ func Parse(program [][]any, indents []int) []any {
 			continue
 		}
 		if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "=" {
-			lines = append(lines, codeBlock{"setvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
+			lines = append(lines, CodeBlock{"setvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
 		} else if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == ":=" {
-			lines = append(lines, codeBlock{"newvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
+			lines = append(lines, CodeBlock{"newvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
 		} else if typeof(line[0]) == "lex.Token" && line[0].(lex.Token).Key == "if" {
 			if len(line) < 3 {
 				if len(line) == 2 {
@@ -244,7 +244,7 @@ func Parse(program [][]any, indents []int) []any {
 					toParse = append(toParse, program[i])
 					i++
 				}
-				lines = append(line, codeBlock{"if", "", append([]any{parseexpr(line[1 : len(line)-1])}, Parse(toParse, indents[start+1:i]))})
+				lines = append(line, CodeBlock{"if", "", append([]any{parseexpr(line[1 : len(line)-1])}, Parse(toParse, indents[start+1:i]))})
 				i--
 			} else {
 				fmt.Println("Error: expected ':' in 'if' statement")

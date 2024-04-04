@@ -1,1 +1,2 @@
-var := strcat("a" + "b","c")
+var := "Hello, " + "world!" + " More text."
+println(var, " Even more" + " text.")

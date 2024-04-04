@@ -16,7 +16,7 @@ func Lex(txt string) ([][]any, []int) {
 	reint := regexp.MustCompile(`^(\d+)(?:\b|$)`)
 	restr := regexp.MustCompile(`^"([^"]*)"`)
 	reid := regexp.MustCompile(`^([a-zA-Z]\w*|(?:\(|\)|\+|-|\*|/|=|:=|:|\.|,))`)
-	recmnt := regexp.MustCompile(`^(#[^\n]*|^'[^']*'|\s+)`)
+	recmnt := regexp.MustCompile(`^(#[^\n]*|^'[^']*'|(?:\t| )+)`)
 	retabs := regexp.MustCompile(`^(?:(\t|    ))*`)
 
 	values := make([][]any, 1)

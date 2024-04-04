@@ -3,9 +3,11 @@ module github.com/FlummoxTheMagnificent/Cold/tree/main/cold
 go 1.22.1
 
 replace github.com/FlummoxTheMagnificent/Cold/tree/main/lex => ../lex
+replace github.com/FlummoxTheMagnificent/Cold/tree/main/parse => ../parse
 
 require (
 	github.com/FlummoxTheMagnificent/Cold/tree/main/lex v0.0.0-00010101000000-000000000000
+	github.com/FlummoxTheMagnificent/Cold/tree/main/parse v0.0.0-00010101000000-000000000000
 	github.com/llir/llvm v0.3.6
 )
 

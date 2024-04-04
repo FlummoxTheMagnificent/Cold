@@ -1,2 +1,1 @@
-var1 := 1.2
-println(typeof(var1))
+var := strcat("a" + "b","c")

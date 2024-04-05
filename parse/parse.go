@@ -166,7 +166,20 @@ func format(tokens []any) []any {
 			prev = i.(lex.Token).Key
 		}
 	}
+	if prev != "" {
+		if !(isexpr || (output == nil && queue == nil)) {
+			fmt.Println("Error: unexpected", prev)
+			os.Exit(1)
+		}
+		negate = false
+		output = append(output, Keyword{prev})
+		isexpr = false
+		if len(werevalues) > 0 {
+			werevalues[len(werevalues)-1] = true
+		}
 
+		prev = ""
+	}
 	for i := len(queue) - 1; i > -1; i-- {
 		if typeof(queue[i]) == "lex.Token" && queue[i].(lex.Token).Key == "(" {
 			fmt.Println("Error: missing )")

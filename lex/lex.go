@@ -12,8 +12,8 @@ type Token struct {
 }
 
 func Lex(txt string) ([][]any, []int) {
-	refloat := regexp.MustCompile(`^(\d+\.\d*)(?:\b|$)`)
-	reint := regexp.MustCompile(`^(\d+)(?:\b|$)`)
+	refloat := regexp.MustCompile(`^(\d+\.\d*)(?:[^\w]|$)`)
+	reint := regexp.MustCompile(`^(\d+)\b`)
 	restr := regexp.MustCompile(`^"([^"]*)"`)
 	reid := regexp.MustCompile(`^([a-zA-Z]\w*|(?:\(|\)|\+|-|\*|/|=|:=|:|\.|,))`)
 	recmnt := regexp.MustCompile(`^(#[^\n]*|^'[^']*'|(?:\t| )+)`)

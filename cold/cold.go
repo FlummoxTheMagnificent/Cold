@@ -123,8 +123,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 		} else if key.Expr == "/" {
 			first := eval(key.First, v, f, m, entry, main)
 			second := eval(key.Second, v, f, m, entry, main)
-			firstType := typeof(first)[10:]
-			secondType := typeof(second)[10:]
+			firstType := first.Type().String()
+			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
 				return entry.NewSDiv(first, second)
 			} else if firstType == "float" && secondType == "float" {
@@ -194,7 +194,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			gep := entry.NewGetElementPtr(strtype, arg, zero, zero)
 			entry.NewCall((*f)["print"], entry.NewLoad(types.I8Ptr, gep))
 		} else if name == "typeof" {
-			return eval(eval(args[0], v, f, m, entry, main).Type().String(), v, f, m, entry, main)
+			return parseStr(eval(args[0], v, f, m, entry, main).Type().String(), entry)
 		} else if name == "str" {
 			if len(args) != 1 {
 				fmt.Println("Error: wrong argument count for typeof()")
@@ -226,7 +226,6 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				os.Exit(1)
 			}
 			item := eval(code.Code[0], v, f, m, entry, main)
-			fmt.Println(expr, item)
 			typ := prev.ptr.Type().String()
 			if item.Type().String() != typ[:len(typ)-1] {
 				fmt.Println("Error: wrong value type for", code.Data, "(expected", typ[:len(typ)-1], "but received", item.Type().String()+")")
@@ -300,6 +299,7 @@ func runLlvm(llvm string) {
 }
 func CompileAndExecute(file string) {
 	lexed, indents := lex.Lex(file)
+	fmt.Println(lexed)
 	parsed := parse.Parse(lexed, indents)
 	llvm := astToLlvm(parsed)
 	fmt.Println(llvm)

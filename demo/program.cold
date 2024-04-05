@@ -1,6 +1,1 @@
-a := "Hello, "
-
-b := "stuff"
-b = "world" + "!"
-
-println(a, b)
+println("Hello, world!")

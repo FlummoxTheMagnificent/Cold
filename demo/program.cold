@@ -1,2 +1,6 @@
-var := "Hello, " + "world!" + " More text."
-println(var, " Even more" + " text.")
+a := "Hello, "
+
+b := "stuff"
+b = "world" + "!"
+
+println(a, b)

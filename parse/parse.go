@@ -177,7 +177,6 @@ func format(tokens []any) []any {
 		if len(werevalues) > 0 {
 			werevalues[len(werevalues)-1] = true
 		}
-
 		prev = ""
 	}
 	for i := len(queue) - 1; i > -1; i-- {

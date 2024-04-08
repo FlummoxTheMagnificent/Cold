@@ -256,8 +256,8 @@ func Parse(program [][]any, indents []int) []any {
 					toParse = append(toParse, program[i])
 					i++
 				}
-				lines = append(line, CodeBlock{"if", "", append([]any{parseexpr(line[1 : len(line)-1])}, Parse(toParse, indents[start+1:i]))})
 				i--
+				lines = append(lines, CodeBlock{"if", "", append([]any{parseexpr(line[1 : len(line)-1])}, Parse(toParse, indents[start+1:i])...)})
 			} else {
 				fmt.Println("Error: expected ':' in 'if' statement")
 				os.Exit(1)

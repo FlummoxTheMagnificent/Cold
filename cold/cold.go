@@ -26,8 +26,9 @@ func typeof(item any) string {
 	return fmt.Sprintf("%T", item)
 }
 
-func parseToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) {
+func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) {
 	for _, line := range program {
+		//fmt.Println("a", line.(parse.CodeBlock).Code)
 		eval(line, v, f, m, entry, main)
 	}
 }
@@ -67,6 +68,39 @@ func strJoin(first value.Value, second value.Value, entry *ir.Block, f *map[stri
 
 	return strptr
 }
+func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value {
+	if item.Type().String() == "{ i8*, i64 }*" {
+		return item
+	} else if item.Type().String() == "i64" {
+		zero := constant.NewInt(types.I32, 0)
+		len := entry.NewCall((*f)["intlen"], item)
+		str := entry.NewCall((*f)["strmalloc"], len)
+		entry.NewCall((*f)["itoa"], str, item)
+		strptr := entry.NewAlloca(strtype)
+		newstrgep := entry.NewGetElementPtr(strtype, strptr, zero, zero)
+		entry.NewStore(str, newstrgep)
+		lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
+		entry.NewStore(len, lengep)
+		return strptr
+	} else if item.Type().String() == "float" {
+		zero := constant.NewInt(types.I32, 0)
+		len := entry.NewCall((*f)["floatlen"], item)
+		str := entry.NewCall((*f)["strmalloc"], len)
+		entry.NewCall((*f)["ftoa"], str, item)
+		strptr := entry.NewAlloca(strtype)
+		newstrgep := entry.NewGetElementPtr(strtype, strptr, zero, zero)
+		entry.NewStore(str, newstrgep)
+		lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
+		entry.NewStore(len, lengep)
+		return strptr
+	}
+	fmt.Println("Failed to convert", item, "to type string")
+	os.Exit(1)
+	return nil
+}
+
+var lastentry *ir.Block
+
 func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) value.Value {
 	if typeof(expr) == "string" {
 		return parseStr(expr.(string), entry)
@@ -156,18 +190,10 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			if len(args) == 0 {
 				return nil
 			}
-			arg := eval(args[0], v, f, m, entry, main)
-			if arg.Type().String() != "{ i8*, i64 }*" {
-				fmt.Println("Error: invalid argument type", arg.Type().String(), "for function print() (expected string)")
-				os.Exit(1)
-			}
+			arg := str(eval(args[0], v, f, m, entry, main), entry, f)
 			for _, i := range args[1:] {
 				this := eval(i, v, f, m, entry, main)
-				if this.Type().String() != "{ i8*, i64 }*" {
-					fmt.Println("Error: invalid argument type", this.Type().String(), "for function print() (expected string)")
-					os.Exit(1)
-				}
-				arg = strJoin(arg, this, entry, f)
+				arg = strJoin(arg, str(this, entry, f), entry, f)
 			}
 			zero := constant.NewInt(types.I32, 0)
 			gep := entry.NewGetElementPtr(strtype, arg, zero, zero)
@@ -176,18 +202,10 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			if len(args) == 0 {
 				return nil
 			}
-			arg := eval(args[0], v, f, m, entry, main)
-			if arg.Type().String() != "{ i8*, i64 }*" {
-				fmt.Println("Error: invalid argument type", arg.Type().String(), "for function println() (expected string)")
-				os.Exit(1)
-			}
+			arg := str(eval(args[0], v, f, m, entry, main), entry, f)
 			for _, i := range args[1:] {
 				this := eval(i, v, f, m, entry, main)
-				if this.Type().String() != "{ i8*, i64 }*" {
-					fmt.Println("Error: invalid argument type", this.Type().String(), "for function println() (expected string)")
-					os.Exit(1)
-				}
-				arg = strJoin(arg, this, entry, f)
+				arg = strJoin(arg, str(this, entry, f), entry, f)
 			}
 			arg = strJoin(arg, parseStr("\n", entry), entry, f)
 			zero := constant.NewInt(types.I32, 0)
@@ -202,21 +220,10 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			num := eval(args[0], v, f, m, entry, main)
 			if num.Type().String() != "i64" {
-				fmt.Println("Error: invalid argument type", args[0].(value.Value).Type().String(), "for function str() (expected int)")
+				fmt.Println("Error: invalid argument type (" + num.Type().String() + ") for function str() (expected int)")
 				os.Exit(1)
 			}
-			function := (*f)["sprintf"]
-			zero := constant.NewInt(types.I32, 0)
-			str := entry.NewGetElementPtr(types.NewArray(20, types.I8), entry.NewAlloca(types.NewArray(20, types.I8)), zero, zero)
-			instr := entry.NewAlloca(types.NewArray(3, types.I8))
-			entry.NewStore(constant.NewCharArrayFromString("%d\x00"), instr)
-			entry.NewCall(function, str, entry.NewGetElementPtr(types.NewArray(3, types.I8), instr, zero, zero), num)
-			strptr := entry.NewAlloca(strtype)
-			newstrgep := entry.NewGetElementPtr(strtype, strptr, zero, zero)
-			entry.NewStore(str, newstrgep)
-			lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
-			entry.NewStore(constant.NewInt(types.I64, 20), lengep)
-			return strptr
+			return str(num, entry, f)
 		} else if function, exists := (*f)[name]; exists {
 			list := make([]value.Value, len(args))
 			for i, item := range args {
@@ -254,9 +261,13 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			entry.NewStore(item, ptr)
 		} else if expr.(parse.CodeBlock).Key == "if" {
 			code := expr.(parse.CodeBlock)
-			//cond := eval(code.code[0], v, f, m, entry, main)
+			cond := eval(code.Code[0], v, f, m, entry, main)
 			then := main.NewBlock("")
-			parseToLlvm(code.Code[1:], v, f, m, then, main)
+			evalToLlvm(code.Code[1:], v, f, m, then, main)
+			end := main.NewBlock("")
+			then.NewBr(end)
+			entry.NewCondBr(cond, then, end)
+			lastentry = end
 		}
 	} else if typeof(expr) == "parse.Keyword" {
 		variable, exists := (*v)[expr.(parse.Keyword).Key]
@@ -271,7 +282,11 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 func builtinFuncs(f *map[string]*ir.Func, m *ir.Module) {
 	(*f)["print"] = m.NewFunc("printf", types.Void, ir.NewParam("p1", types.I8Ptr))
 	(*f)["strcat"] = m.NewFunc("strcat", types.I8Ptr, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I8Ptr))
-	(*f)["sprintf"] = m.NewFunc("sprintf", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I8Ptr), ir.NewParam("p3", types.I64))
+	(*f)["intlen"] = m.NewFunc("intlen", types.I64, ir.NewParam("p1", types.I64))
+	(*f)["itoa"] = m.NewFunc("itoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I64))
+	(*f)["floatlen"] = m.NewFunc("floatlen", types.I64, ir.NewParam("p1", types.Float))
+	(*f)["ftoa"] = m.NewFunc("ftoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.Float))
+	(*f)["snprintf"] = m.NewFunc("snprintf", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I64), ir.NewParam("p3", types.I8Ptr), ir.NewParam("p4", types.Float))
 	(*f)["strmalloc"] = m.NewFunc("malloc", types.I8Ptr, ir.NewParam("p1", types.I64))
 }
 func astToLlvm(program []any) string {
@@ -281,11 +296,11 @@ func astToLlvm(program []any) string {
 
 	builtinFuncs(&funcs, m)
 	main := m.NewFunc("main", types.I32)
-	entry := main.NewBlock("")
+	lastentry = main.NewBlock("")
 	for _, line := range program {
-		eval(line, &variables, &funcs, m, entry, main)
+		eval(line, &variables, &funcs, m, lastentry, main)
 	}
-	entry.NewRet(constant.NewInt(types.I32, 0))
+	lastentry.NewRet(constant.NewInt(types.I32, 0))
 
 	return m.String()
 }
@@ -295,7 +310,7 @@ func runLlvm(llvm string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	os.Remove("program.ll")
+	//os.Remove("program.ll")
 	cmd = exec.Command("clang", "program.o", "../cold-c/cold-c.o", "-oprogram", "-O3")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -311,7 +326,7 @@ func CompileAndExecute(file string) {
 	lexed, indents := lex.Lex(file)
 	parsed := parse.Parse(lexed, indents)
 	llvm := astToLlvm(parsed)
-	fmt.Println(llvm)
+	//fmt.Println(llvm)
 
 	runLlvm(llvm)
 }

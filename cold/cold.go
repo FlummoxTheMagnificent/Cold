@@ -158,13 +158,13 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			arg := eval(args[0], v, f, m, entry, main)
 			if arg.Type().String() != "{ i8*, i64 }*" {
-				fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "string"+")")
+				fmt.Println("Error: invalid argument type", arg.Type().String(), "for function print() (expected string)")
 				os.Exit(1)
 			}
 			for _, i := range args[1:] {
 				this := eval(i, v, f, m, entry, main)
 				if this.Type().String() != "{ i8*, i64 }*" {
-					fmt.Println("Error: invalid argument type", this.Type().String(), "for function", name+"()", "(expected", "string"+")")
+					fmt.Println("Error: invalid argument type", this.Type().String(), "for function print() (expected string)")
 					os.Exit(1)
 				}
 				arg = strJoin(arg, this, entry, f)
@@ -178,13 +178,13 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			arg := eval(args[0], v, f, m, entry, main)
 			if arg.Type().String() != "{ i8*, i64 }*" {
-				fmt.Println("Error: invalid argument type", arg.Type().String(), "for function", name+"()", "(expected", "string"+")")
+				fmt.Println("Error: invalid argument type", arg.Type().String(), "for function println() (expected string)")
 				os.Exit(1)
 			}
 			for _, i := range args[1:] {
 				this := eval(i, v, f, m, entry, main)
 				if this.Type().String() != "{ i8*, i64 }*" {
-					fmt.Println("Error: invalid argument type", this.Type().String(), "for function", name+"()", "(expected", "string"+")")
+					fmt.Println("Error: invalid argument type", this.Type().String(), "for function println() (expected string)")
 					os.Exit(1)
 				}
 				arg = strJoin(arg, this, entry, f)
@@ -197,16 +197,26 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			return parseStr(eval(args[0], v, f, m, entry, main).Type().String(), entry)
 		} else if name == "str" {
 			if len(args) != 1 {
-				fmt.Println("Error: wrong argument count for typeof()")
+				fmt.Println("Error: wrong argument count for str()")
+				os.Exit(1)
+			}
+			num := eval(args[0], v, f, m, entry, main)
+			if num.Type().String() != "i64" {
+				fmt.Println("Error: invalid argument type", args[0].(value.Value).Type().String(), "for function str() (expected int)")
 				os.Exit(1)
 			}
 			function := (*f)["sprintf"]
-			zero := constant.NewInt(types.I64, 0)
+			zero := constant.NewInt(types.I32, 0)
 			str := entry.NewGetElementPtr(types.NewArray(20, types.I8), entry.NewAlloca(types.NewArray(20, types.I8)), zero, zero)
-			instr := parseStr("%d", entry)
-			num := eval(args[0], v, f, m, entry, main)
-			entry.NewCall(function, str, instr, num)
-			return str
+			instr := entry.NewAlloca(types.NewArray(3, types.I8))
+			entry.NewStore(constant.NewCharArrayFromString("%d\x00"), instr)
+			entry.NewCall(function, str, entry.NewGetElementPtr(types.NewArray(3, types.I8), instr, zero, zero), num)
+			strptr := entry.NewAlloca(strtype)
+			newstrgep := entry.NewGetElementPtr(strtype, strptr, zero, zero)
+			entry.NewStore(str, newstrgep)
+			lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
+			entry.NewStore(constant.NewInt(types.I64, 20), lengep)
+			return strptr
 		} else if function, exists := (*f)[name]; exists {
 			list := make([]value.Value, len(args))
 			for i, item := range args {
@@ -301,7 +311,7 @@ func CompileAndExecute(file string) {
 	lexed, indents := lex.Lex(file)
 	parsed := parse.Parse(lexed, indents)
 	llvm := astToLlvm(parsed)
-	//fmt.Println(llvm)
+	fmt.Println(llvm)
 
 	runLlvm(llvm)
 }

@@ -11,3 +11,4 @@ Variables are assigned using `:=` and reassigned using `=`. They can hold types 
 - `println()`: Prints the given text followed by a newline. Accepts any number of arguments, which are automatically joined.
 - `print()`: Works like `println()` but without the newline.
 - `typeof()`: Accepts one argument and returns the type of the given variable.
+- `str()`: Converts one integer to a string and returns the new string.

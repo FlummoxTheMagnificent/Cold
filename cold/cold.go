@@ -285,8 +285,8 @@ func runLlvm(llvm string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	//os.Remove("program.ll")
-	cmd = exec.Command("clang", "program.o", "cold-c.o", "-oprogram", "-O3")
+	os.Remove("program.ll")
+	cmd = exec.Command("clang", "program.o", "../cold-c/cold-c.o", "-oprogram", "-O3")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
@@ -299,10 +299,9 @@ func runLlvm(llvm string) {
 }
 func CompileAndExecute(file string) {
 	lexed, indents := lex.Lex(file)
-	fmt.Println(lexed)
 	parsed := parse.Parse(lexed, indents)
 	llvm := astToLlvm(parsed)
-	fmt.Println(llvm)
+	//fmt.Println(llvm)
 
 	runLlvm(llvm)
 }

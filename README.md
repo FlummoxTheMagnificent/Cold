@@ -19,6 +19,7 @@ if (condition):
 	(code)
 else:
 	(other code)
+```
 
 ## Built-in Functions
 - `println()`: Prints the given text followed by a newline. Accepts any number of arguments, which are automatically joined.

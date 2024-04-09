@@ -26,10 +26,9 @@ func typeof(item any) string {
 	return fmt.Sprintf("%T", item)
 }
 
-func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) {
+func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, main *ir.Func) {
 	for _, line := range program {
-		//fmt.Println("a", line.(parse.CodeBlock).Code)
-		eval(line, v, f, m, entry, main)
+		eval(line, v, f, m, lastentry, main)
 	}
 }
 func parseStr(str string, entry *ir.Block) value.Value {
@@ -261,13 +260,14 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			entry.NewStore(item, ptr)
 		} else if expr.(parse.CodeBlock).Key == "if" {
 			code := expr.(parse.CodeBlock)
-			cond := eval(code.Code[0], v, f, m, entry, main)
 			then := main.NewBlock("")
-			evalToLlvm(code.Code[1:], v, f, m, then, main)
-			end := main.NewBlock("")
-			then.NewBr(end)
-			entry.NewCondBr(cond, then, end)
-			lastentry = end
+			lastentry = then
+			evalToLlvm(code.Code[1:], v, f, m, main)
+			new := main.NewBlock("")
+			lastentry.NewBr(new)
+			lastentry = new
+			cond := eval(code.Code[0], v, f, m, entry, main)
+			entry.NewCondBr(cond, then, new)
 		}
 	} else if typeof(expr) == "parse.Keyword" {
 		variable, exists := (*v)[expr.(parse.Keyword).Key]

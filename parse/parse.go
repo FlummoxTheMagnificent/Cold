@@ -247,17 +247,17 @@ func Parse(program [][]any, indents []int) []any {
 				}
 				os.Exit(1)
 			}
-			last := line[len(line)-1]
-			if typeof(last) == "lex.Token" && last.(lex.Token).Key == ":" {
+			last := len(line) - 1
+			if typeof(line[last]) == "lex.Token" && line[last].(lex.Token).Key == ":" {
 				var toParse [][]any
+				var toParseIndents []int
 				start := i
-				i++
-				for i < len(program) && indents[i] > indents[start] {
-					toParse = append(toParse, program[i])
+				for i+1 < len(program) && indents[i+1] > indents[start] {
+					toParse = append(toParse, program[i+1])
+					toParseIndents = append(toParseIndents, indents[i+1]-1)
 					i++
 				}
-				i--
-				lines = append(lines, CodeBlock{"if", "", append([]any{parseexpr(line[1 : len(line)-1])}, Parse(toParse, indents[start+1:i])...)})
+				lines = append(lines, CodeBlock{"if", "", append([]any{parseexpr(line[1:last])}, Parse(toParse, toParseIndents)...)})
 			} else {
 				fmt.Println("Error: expected ':' in 'if' statement")
 				os.Exit(1)

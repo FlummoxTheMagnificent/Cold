@@ -7,8 +7,14 @@ Lines starting with `#` are considered comments and will be ignored. You can als
 ## Variables
 Variables are assigned using `:=` and reassigned using `=`. They can hold types int (`i64`), float (`float`), or string (`{ i8*, i64 }*`).
 
+## If Statements
+If statements have the same syntax as python:
+`if _condition_:
+	_code_
+`
+
 ## Built-in Functions
 - `println()`: Prints the given text followed by a newline. Accepts any number of arguments, which are automatically joined.
 - `print()`: Works like `println()` but without the newline.
 - `typeof()`: Accepts one argument and returns the type of the given variable.
-- `str()`: Converts one integer to a string and returns the new string.
+- `str()`: Converts one item to a string

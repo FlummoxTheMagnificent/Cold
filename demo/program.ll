@@ -16,7 +16,7 @@ declare i64 @booltoint(i1 %p1)
 
 define i32 @main() {
 0:
-	%1 = fcmp olt float 0x3FF1999980000000, 0x3FF0041880000000
+	%1 = icmp sge i64 1, 2
 	br i1 %1, label %2, label %31
 
 2:

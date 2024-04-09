@@ -11,8 +11,8 @@ Variables are assigned using `:=` and reassigned using `=`. They can hold types 
 If statements have the same syntax as python:
 
 ```
-if ***condition***:
-	***code***
+if (condition):
+	(code)
 ```
 
 ## Built-in Functions

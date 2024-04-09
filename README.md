@@ -9,7 +9,8 @@ Variables are assigned using `:=` and reassigned using `=`. They can hold types 
 
 ## If Statements
 If statements have the same syntax as python:
-`if *condition*:\n\t*code*`
+	if ***condition***:
+		***code***
 
 ## Built-in Functions
 - `println()`: Prints the given text followed by a newline. Accepts any number of arguments, which are automatically joined.

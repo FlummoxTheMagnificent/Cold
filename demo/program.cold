@@ -1,12 +1,15 @@
 if 1 = 2:
 	println("true")
 	if 1 = 2:
-		println("true1")
+		println("truetrue")
 	else:
-		println("true2")
+		println("truefalse")
 else:
+	x := 1
 	println("false")
-	if 1 = 2:
-		println("false1")
+	if 1 = x:
+		println("falsetrue")
 	else:
-		println("false2")
+		println("falsefalse")
+	x = x * 6
+	println(x)

@@ -18,17 +18,18 @@ import (
 var strtype = types.NewStruct(types.I8Ptr, types.I64)
 
 type vari struct {
-	ptr value.Value
-	typ types.Type
+	ptr   value.Value
+	typ   types.Type
+	scope int
 }
 
 func typeof(item any) string {
 	return fmt.Sprintf("%T", item)
 }
 
-func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, main *ir.Func) {
+func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, main *ir.Func, indent int) {
 	for _, line := range program {
-		eval(line, v, f, m, lastentry, main)
+		eval(line, v, f, m, lastentry, main, indent)
 	}
 }
 func parseStr(str string, entry *ir.Block) value.Value {
@@ -109,10 +110,17 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 	os.Exit(1)
 	return nil
 }
+func clean(v *map[string]vari, indent int) {
+	for key, item := range *v {
+		if item.scope > indent {
+			delete(*v, key)
+		}
+	}
+}
 
 var lastentry *ir.Block
 
-func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func) value.Value {
+func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func, indent int) value.Value {
 	if typeof(expr) == "string" {
 		return parseStr(expr.(string), entry)
 	} else if typeof(expr) == "float64" {
@@ -122,8 +130,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 	} else if typeof(expr) == "parse.Expression" {
 		key := expr.(parse.Expression)
 		if key.Expr == "+" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -138,10 +146,10 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				return strJoin(first, second, entry, f)
 			}
 		} else if key.Expr == "-" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
-			firstType := typeof(first)[10:]
-			secondType := typeof(second)[10:]
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
+			firstType := first.Type().String()
+			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
 				return entry.NewSub(first, second)
 			} else if firstType == "float" && secondType == "float" {
@@ -152,10 +160,10 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				return entry.NewFSub(first, entry.NewSIToFP(second, types.Float))
 			}
 		} else if key.Expr == "*" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
-			firstType := typeof(first)[10:]
-			secondType := typeof(second)[10:]
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
+			firstType := first.Type().String()
+			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
 				return entry.NewMul(first, second)
 			} else if firstType == "float" && secondType == "float" {
@@ -166,8 +174,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				return entry.NewFMul(first, entry.NewSIToFP(second, types.Float))
 			}
 		} else if key.Expr == "/" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -180,8 +188,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				return entry.NewFDiv(first, entry.NewSIToFP(second, types.Float))
 			}
 		} else if key.Expr == "=" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := first.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -193,8 +201,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			return constant.NewInt(types.I1, 0)
 		} else if key.Expr == "!=" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := first.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -206,8 +214,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			return constant.NewInt(types.I1, 0)
 		} else if key.Expr == ">" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := first.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -219,8 +227,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			return constant.NewInt(types.I1, 0)
 		} else if key.Expr == "<" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -232,8 +240,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			return constant.NewInt(types.I1, 0)
 		} else if key.Expr == ">=" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -245,8 +253,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			return constant.NewInt(types.I1, 0)
 		} else if key.Expr == "<=" {
-			first := eval(key.First, v, f, m, entry, main)
-			second := eval(key.Second, v, f, m, entry, main)
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
 			firstType := first.Type().String()
 			secondType := second.Type().String()
 			if firstType == "i64" && secondType == "i64" {
@@ -265,9 +273,9 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			if len(args) == 0 {
 				return nil
 			}
-			arg := str(eval(args[0], v, f, m, entry, main), entry, f)
+			arg := str(eval(args[0], v, f, m, entry, main, indent), entry, f)
 			for _, i := range args[1:] {
-				this := eval(i, v, f, m, entry, main)
+				this := eval(i, v, f, m, entry, main, indent)
 				arg = strJoin(arg, str(this, entry, f), entry, f)
 			}
 			zero := constant.NewInt(types.I32, 0)
@@ -277,9 +285,9 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			if len(args) == 0 {
 				return nil
 			}
-			arg := str(eval(args[0], v, f, m, entry, main), entry, f)
+			arg := str(eval(args[0], v, f, m, entry, main, indent), entry, f)
 			for _, i := range args[1:] {
-				this := eval(i, v, f, m, entry, main)
+				this := eval(i, v, f, m, entry, main, indent)
 				arg = strJoin(arg, str(this, entry, f), entry, f)
 			}
 			arg = strJoin(arg, parseStr("\n", entry), entry, f)
@@ -287,13 +295,13 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			gep := entry.NewGetElementPtr(strtype, arg, zero, zero)
 			entry.NewCall((*f)["print"], entry.NewLoad(types.I8Ptr, gep))
 		} else if name == "typeof" {
-			return parseStr(eval(args[0], v, f, m, entry, main).Type().String(), entry)
+			return parseStr(eval(args[0], v, f, m, entry, main, indent).Type().String(), entry)
 		} else if name == "str" {
 			if len(args) != 1 {
 				fmt.Println("Error: wrong argument count for str()")
 				os.Exit(1)
 			}
-			num := eval(args[0], v, f, m, entry, main)
+			num := eval(args[0], v, f, m, entry, main, indent)
 			if num.Type().String() != "i64" {
 				fmt.Println("Error: invalid argument type (" + num.Type().String() + ") for function str() (expected int)")
 				os.Exit(1)
@@ -302,7 +310,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 		} else if function, exists := (*f)[name]; exists {
 			list := make([]value.Value, len(args))
 			for i, item := range args {
-				list[i] = eval(item, v, f, m, entry, main)
+				list[i] = eval(item, v, f, m, entry, main, indent)
 			}
 			return entry.NewCall(function, list...)
 		} else {
@@ -314,10 +322,10 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			code := expr.(parse.CodeBlock)
 			prev, exists := (*v)[code.Data]
 			if !exists {
-				fmt.Println("Error: use of undeclared", code.Data)
+				fmt.Println("Error: use of undeclared", code.Data, "(possibly out of scope)")
 				os.Exit(1)
 			}
-			item := eval(code.Code[0], v, f, m, entry, main)
+			item := eval(code.Code[0], v, f, m, entry, main, indent)
 			typ := prev.ptr.Type().String()
 			if item.Type().String() != typ[:len(typ)-1] {
 				fmt.Println("Error: wrong value type for", code.Data, "(expected", typ[:len(typ)-1], "but received", item.Type().String()+")")
@@ -330,19 +338,20 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				fmt.Println("Error: already declared", code.Data)
 				os.Exit(1)
 			}
-			item := eval(code.Code[0], v, f, m, entry, main)
+			item := eval(code.Code[0], v, f, m, entry, main, indent)
 			ptr := entry.NewAlloca(item.Type())
-			(*v)[code.Data] = vari{ptr, item.Type()}
+			(*v)[code.Data] = vari{ptr, item.Type(), indent}
 			entry.NewStore(item, ptr)
 		} else if expr.(parse.CodeBlock).Key == "if" {
 			code := expr.(parse.CodeBlock)
 			then := main.NewBlock("")
 			lastentry = then
-			evalToLlvm(code.Code[1:], v, f, m, main)
+			evalToLlvm(code.Code[1:], v, f, m, main, indent+1)
+			clean(v, indent)
 			new := main.NewBlock("")
 			lastentry.NewBr(new)
 			lastentry = new
-			cond := eval(code.Code[0], v, f, m, entry, main)
+			cond := eval(code.Code[0], v, f, m, entry, main, indent+1)
 			entry.NewCondBr(cond, then, new)
 		} else if expr.(parse.CodeBlock).Key == "ifelse" {
 			code := expr.(parse.CodeBlock)
@@ -350,22 +359,24 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			then := main.NewBlock("")
 			lastentry = then
 			new := main.NewBlock("")
-			evalToLlvm(code.Code[0].([]any)[1:], v, f, m, main)
+			evalToLlvm(code.Code[0].([]any)[1:], v, f, m, main, indent+1)
+			clean(v, indent)
 			lastentry.NewBr(new)
 
 			els := main.NewBlock("")
 			lastentry = els
-			evalToLlvm(code.Code[1].([]any), v, f, m, main)
+			evalToLlvm(code.Code[1].([]any), v, f, m, main, indent+1)
+			clean(v, indent)
 			lastentry.NewBr(new)
 			lastentry = new
 
-			cond := eval(code.Code[0].([]any)[0], v, f, m, entry, main)
+			cond := eval(code.Code[0].([]any)[0], v, f, m, entry, main, indent+1)
 			entry.NewCondBr(cond, then, els)
 		}
 	} else if typeof(expr) == "parse.Keyword" {
 		variable, exists := (*v)[expr.(parse.Keyword).Key]
 		if !exists {
-			fmt.Println("Error: use of undeclared", expr.(parse.Keyword).Key)
+			fmt.Println("Error: use of undeclared", expr.(parse.Keyword).Key, "(possibly out of scope)")
 			os.Exit(1)
 		}
 		return entry.NewLoad(variable.typ, variable.ptr)
@@ -391,7 +402,7 @@ func astToLlvm(program []any) string {
 	main := m.NewFunc("main", types.I32)
 	lastentry = main.NewBlock("")
 	for _, line := range program {
-		eval(line, &variables, &funcs, m, lastentry, main)
+		eval(line, &variables, &funcs, m, lastentry, main, 0)
 	}
 	lastentry.NewRet(constant.NewInt(types.I32, 0))
 

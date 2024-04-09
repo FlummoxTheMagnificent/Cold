@@ -63,14 +63,14 @@ define i32 @main() {
 	ret i32 0
 
 32:
-	%33 = alloca [6 x i8]
-	store [6 x i8] c"true1\00", [6 x i8]* %33
+	%33 = alloca [9 x i8]
+	store [9 x i8] c"truetrue\00", [9 x i8]* %33
 	%34 = alloca { i8*, i64 }
-	%35 = getelementptr [6 x i8], [6 x i8]* %33, i32 0, i32 0
+	%35 = getelementptr [9 x i8], [9 x i8]* %33, i32 0, i32 0
 	%36 = getelementptr { i8*, i64 }, { i8*, i64 }* %34, i32 0, i32 0
 	store i8* %35, i8** %36
 	%37 = getelementptr { i8*, i64 }, { i8*, i64 }* %34, i32 0, i32 1
-	store i64 6, i64* %37
+	store i64 9, i64* %37
 	%38 = alloca [2 x i8]
 	store [2 x i8] c"\0A\00", [2 x i8]* %38
 	%39 = alloca { i8*, i64 }
@@ -105,14 +105,14 @@ define i32 @main() {
 	br label %31
 
 61:
-	%62 = alloca [6 x i8]
-	store [6 x i8] c"true2\00", [6 x i8]* %62
+	%62 = alloca [10 x i8]
+	store [10 x i8] c"truefalse\00", [10 x i8]* %62
 	%63 = alloca { i8*, i64 }
-	%64 = getelementptr [6 x i8], [6 x i8]* %62, i32 0, i32 0
+	%64 = getelementptr [10 x i8], [10 x i8]* %62, i32 0, i32 0
 	%65 = getelementptr { i8*, i64 }, { i8*, i64 }* %63, i32 0, i32 0
 	store i8* %64, i8** %65
 	%66 = getelementptr { i8*, i64 }, { i8*, i64 }* %63, i32 0, i32 1
-	store i64 6, i64* %66
+	store i64 10, i64* %66
 	%67 = alloca [2 x i8]
 	store [2 x i8] c"\0A\00", [2 x i8]* %67
 	%68 = alloca { i8*, i64 }
@@ -144,123 +144,166 @@ define i32 @main() {
 	br label %60
 
 89:
-	%90 = alloca [6 x i8]
-	store [6 x i8] c"false\00", [6 x i8]* %90
-	%91 = alloca { i8*, i64 }
-	%92 = getelementptr [6 x i8], [6 x i8]* %90, i32 0, i32 0
-	%93 = getelementptr { i8*, i64 }, { i8*, i64 }* %91, i32 0, i32 0
-	store i8* %92, i8** %93
-	%94 = getelementptr { i8*, i64 }, { i8*, i64 }* %91, i32 0, i32 1
-	store i64 6, i64* %94
-	%95 = alloca [2 x i8]
-	store [2 x i8] c"\0A\00", [2 x i8]* %95
-	%96 = alloca { i8*, i64 }
-	%97 = getelementptr [2 x i8], [2 x i8]* %95, i32 0, i32 0
-	%98 = getelementptr { i8*, i64 }, { i8*, i64 }* %96, i32 0, i32 0
-	store i8* %97, i8** %98
-	%99 = getelementptr { i8*, i64 }, { i8*, i64 }* %96, i32 0, i32 1
-	store i64 2, i64* %99
-	%100 = getelementptr { i8*, i64 }, { i8*, i64 }* %91, i32 0, i32 1
-	%101 = load i64, i64* %100
-	%102 = getelementptr { i8*, i64 }, { i8*, i64 }* %96, i32 0, i32 1
-	%103 = load i64, i64* %102
-	%104 = add i64 %101, %103
-	%105 = call i8* @malloc(i64 %104)
-	%106 = getelementptr { i8*, i64 }, { i8*, i64 }* %91, i32 0, i32 0
-	%107 = load i8*, i8** %106
-	%108 = call i8* @strcat(i8* %105, i8* %107)
-	%109 = getelementptr { i8*, i64 }, { i8*, i64 }* %96, i32 0, i32 0
-	%110 = load i8*, i8** %109
-	%111 = call i8* @strcat(i8* %105, i8* %110)
-	%112 = alloca { i8*, i64 }
-	%113 = getelementptr { i8*, i64 }, { i8*, i64 }* %112, i32 0, i32 0
-	store i8* %105, i8** %113
-	%114 = getelementptr { i8*, i64 }, { i8*, i64 }* %112, i32 0, i32 1
-	store i64 %104, i64* %114
-	%115 = getelementptr { i8*, i64 }, { i8*, i64 }* %112, i32 0, i32 0
-	%116 = load i8*, i8** %115
-	call void @printf(i8* %116)
-	%117 = icmp eq i64 1, 2
-	br i1 %117, label %118, label %147
+	%90 = alloca i64
+	store i64 1, i64* %90
+	%91 = alloca [6 x i8]
+	store [6 x i8] c"false\00", [6 x i8]* %91
+	%92 = alloca { i8*, i64 }
+	%93 = getelementptr [6 x i8], [6 x i8]* %91, i32 0, i32 0
+	%94 = getelementptr { i8*, i64 }, { i8*, i64 }* %92, i32 0, i32 0
+	store i8* %93, i8** %94
+	%95 = getelementptr { i8*, i64 }, { i8*, i64 }* %92, i32 0, i32 1
+	store i64 6, i64* %95
+	%96 = alloca [2 x i8]
+	store [2 x i8] c"\0A\00", [2 x i8]* %96
+	%97 = alloca { i8*, i64 }
+	%98 = getelementptr [2 x i8], [2 x i8]* %96, i32 0, i32 0
+	%99 = getelementptr { i8*, i64 }, { i8*, i64 }* %97, i32 0, i32 0
+	store i8* %98, i8** %99
+	%100 = getelementptr { i8*, i64 }, { i8*, i64 }* %97, i32 0, i32 1
+	store i64 2, i64* %100
+	%101 = getelementptr { i8*, i64 }, { i8*, i64 }* %92, i32 0, i32 1
+	%102 = load i64, i64* %101
+	%103 = getelementptr { i8*, i64 }, { i8*, i64 }* %97, i32 0, i32 1
+	%104 = load i64, i64* %103
+	%105 = add i64 %102, %104
+	%106 = call i8* @malloc(i64 %105)
+	%107 = getelementptr { i8*, i64 }, { i8*, i64 }* %92, i32 0, i32 0
+	%108 = load i8*, i8** %107
+	%109 = call i8* @strcat(i8* %106, i8* %108)
+	%110 = getelementptr { i8*, i64 }, { i8*, i64 }* %97, i32 0, i32 0
+	%111 = load i8*, i8** %110
+	%112 = call i8* @strcat(i8* %106, i8* %111)
+	%113 = alloca { i8*, i64 }
+	%114 = getelementptr { i8*, i64 }, { i8*, i64 }* %113, i32 0, i32 0
+	store i8* %106, i8** %114
+	%115 = getelementptr { i8*, i64 }, { i8*, i64 }* %113, i32 0, i32 1
+	store i64 %105, i64* %115
+	%116 = getelementptr { i8*, i64 }, { i8*, i64 }* %113, i32 0, i32 0
+	%117 = load i8*, i8** %116
+	call void @printf(i8* %117)
+	%118 = load i64, i64* %90
+	%119 = icmp eq i64 1, %118
+	br i1 %119, label %120, label %180
 
-118:
-	%119 = alloca [7 x i8]
-	store [7 x i8] c"false1\00", [7 x i8]* %119
-	%120 = alloca { i8*, i64 }
-	%121 = getelementptr [7 x i8], [7 x i8]* %119, i32 0, i32 0
-	%122 = getelementptr { i8*, i64 }, { i8*, i64 }* %120, i32 0, i32 0
-	store i8* %121, i8** %122
-	%123 = getelementptr { i8*, i64 }, { i8*, i64 }* %120, i32 0, i32 1
-	store i64 7, i64* %123
-	%124 = alloca [2 x i8]
-	store [2 x i8] c"\0A\00", [2 x i8]* %124
-	%125 = alloca { i8*, i64 }
-	%126 = getelementptr [2 x i8], [2 x i8]* %124, i32 0, i32 0
-	%127 = getelementptr { i8*, i64 }, { i8*, i64 }* %125, i32 0, i32 0
-	store i8* %126, i8** %127
-	%128 = getelementptr { i8*, i64 }, { i8*, i64 }* %125, i32 0, i32 1
-	store i64 2, i64* %128
-	%129 = getelementptr { i8*, i64 }, { i8*, i64 }* %120, i32 0, i32 1
-	%130 = load i64, i64* %129
-	%131 = getelementptr { i8*, i64 }, { i8*, i64 }* %125, i32 0, i32 1
+120:
+	%121 = alloca [10 x i8]
+	store [10 x i8] c"falsetrue\00", [10 x i8]* %121
+	%122 = alloca { i8*, i64 }
+	%123 = getelementptr [10 x i8], [10 x i8]* %121, i32 0, i32 0
+	%124 = getelementptr { i8*, i64 }, { i8*, i64 }* %122, i32 0, i32 0
+	store i8* %123, i8** %124
+	%125 = getelementptr { i8*, i64 }, { i8*, i64 }* %122, i32 0, i32 1
+	store i64 10, i64* %125
+	%126 = alloca [2 x i8]
+	store [2 x i8] c"\0A\00", [2 x i8]* %126
+	%127 = alloca { i8*, i64 }
+	%128 = getelementptr [2 x i8], [2 x i8]* %126, i32 0, i32 0
+	%129 = getelementptr { i8*, i64 }, { i8*, i64 }* %127, i32 0, i32 0
+	store i8* %128, i8** %129
+	%130 = getelementptr { i8*, i64 }, { i8*, i64 }* %127, i32 0, i32 1
+	store i64 2, i64* %130
+	%131 = getelementptr { i8*, i64 }, { i8*, i64 }* %122, i32 0, i32 1
 	%132 = load i64, i64* %131
-	%133 = add i64 %130, %132
-	%134 = call i8* @malloc(i64 %133)
-	%135 = getelementptr { i8*, i64 }, { i8*, i64 }* %120, i32 0, i32 0
-	%136 = load i8*, i8** %135
-	%137 = call i8* @strcat(i8* %134, i8* %136)
-	%138 = getelementptr { i8*, i64 }, { i8*, i64 }* %125, i32 0, i32 0
-	%139 = load i8*, i8** %138
-	%140 = call i8* @strcat(i8* %134, i8* %139)
-	%141 = alloca { i8*, i64 }
-	%142 = getelementptr { i8*, i64 }, { i8*, i64 }* %141, i32 0, i32 0
-	store i8* %134, i8** %142
-	%143 = getelementptr { i8*, i64 }, { i8*, i64 }* %141, i32 0, i32 1
-	store i64 %133, i64* %143
-	%144 = getelementptr { i8*, i64 }, { i8*, i64 }* %141, i32 0, i32 0
-	%145 = load i8*, i8** %144
-	call void @printf(i8* %145)
-	br label %146
+	%133 = getelementptr { i8*, i64 }, { i8*, i64 }* %127, i32 0, i32 1
+	%134 = load i64, i64* %133
+	%135 = add i64 %132, %134
+	%136 = call i8* @malloc(i64 %135)
+	%137 = getelementptr { i8*, i64 }, { i8*, i64 }* %122, i32 0, i32 0
+	%138 = load i8*, i8** %137
+	%139 = call i8* @strcat(i8* %136, i8* %138)
+	%140 = getelementptr { i8*, i64 }, { i8*, i64 }* %127, i32 0, i32 0
+	%141 = load i8*, i8** %140
+	%142 = call i8* @strcat(i8* %136, i8* %141)
+	%143 = alloca { i8*, i64 }
+	%144 = getelementptr { i8*, i64 }, { i8*, i64 }* %143, i32 0, i32 0
+	store i8* %136, i8** %144
+	%145 = getelementptr { i8*, i64 }, { i8*, i64 }* %143, i32 0, i32 1
+	store i64 %135, i64* %145
+	%146 = getelementptr { i8*, i64 }, { i8*, i64 }* %143, i32 0, i32 0
+	%147 = load i8*, i8** %146
+	call void @printf(i8* %147)
+	br label %148
 
-146:
+148:
+	%149 = load i64, i64* %90
+	%150 = mul i64 %149, 6
+	store i64 %150, i64* %90
+	%151 = load i64, i64* %90
+	%152 = call i64 @intlen(i64 %151)
+	%153 = call i8* @malloc(i64 %152)
+	%154 = call i64 @itoa(i8* %153, i64 %151)
+	%155 = alloca { i8*, i64 }
+	%156 = getelementptr { i8*, i64 }, { i8*, i64 }* %155, i32 0, i32 0
+	store i8* %153, i8** %156
+	%157 = getelementptr { i8*, i64 }, { i8*, i64 }* %155, i32 0, i32 1
+	store i64 %152, i64* %157
+	%158 = alloca [2 x i8]
+	store [2 x i8] c"\0A\00", [2 x i8]* %158
+	%159 = alloca { i8*, i64 }
+	%160 = getelementptr [2 x i8], [2 x i8]* %158, i32 0, i32 0
+	%161 = getelementptr { i8*, i64 }, { i8*, i64 }* %159, i32 0, i32 0
+	store i8* %160, i8** %161
+	%162 = getelementptr { i8*, i64 }, { i8*, i64 }* %159, i32 0, i32 1
+	store i64 2, i64* %162
+	%163 = getelementptr { i8*, i64 }, { i8*, i64 }* %155, i32 0, i32 1
+	%164 = load i64, i64* %163
+	%165 = getelementptr { i8*, i64 }, { i8*, i64 }* %159, i32 0, i32 1
+	%166 = load i64, i64* %165
+	%167 = add i64 %164, %166
+	%168 = call i8* @malloc(i64 %167)
+	%169 = getelementptr { i8*, i64 }, { i8*, i64 }* %155, i32 0, i32 0
+	%170 = load i8*, i8** %169
+	%171 = call i8* @strcat(i8* %168, i8* %170)
+	%172 = getelementptr { i8*, i64 }, { i8*, i64 }* %159, i32 0, i32 0
+	%173 = load i8*, i8** %172
+	%174 = call i8* @strcat(i8* %168, i8* %173)
+	%175 = alloca { i8*, i64 }
+	%176 = getelementptr { i8*, i64 }, { i8*, i64 }* %175, i32 0, i32 0
+	store i8* %168, i8** %176
+	%177 = getelementptr { i8*, i64 }, { i8*, i64 }* %175, i32 0, i32 1
+	store i64 %167, i64* %177
+	%178 = getelementptr { i8*, i64 }, { i8*, i64 }* %175, i32 0, i32 0
+	%179 = load i8*, i8** %178
+	call void @printf(i8* %179)
 	br label %31
 
-147:
-	%148 = alloca [7 x i8]
-	store [7 x i8] c"false2\00", [7 x i8]* %148
-	%149 = alloca { i8*, i64 }
-	%150 = getelementptr [7 x i8], [7 x i8]* %148, i32 0, i32 0
-	%151 = getelementptr { i8*, i64 }, { i8*, i64 }* %149, i32 0, i32 0
-	store i8* %150, i8** %151
-	%152 = getelementptr { i8*, i64 }, { i8*, i64 }* %149, i32 0, i32 1
-	store i64 7, i64* %152
-	%153 = alloca [2 x i8]
-	store [2 x i8] c"\0A\00", [2 x i8]* %153
-	%154 = alloca { i8*, i64 }
-	%155 = getelementptr [2 x i8], [2 x i8]* %153, i32 0, i32 0
-	%156 = getelementptr { i8*, i64 }, { i8*, i64 }* %154, i32 0, i32 0
-	store i8* %155, i8** %156
-	%157 = getelementptr { i8*, i64 }, { i8*, i64 }* %154, i32 0, i32 1
-	store i64 2, i64* %157
-	%158 = getelementptr { i8*, i64 }, { i8*, i64 }* %149, i32 0, i32 1
-	%159 = load i64, i64* %158
-	%160 = getelementptr { i8*, i64 }, { i8*, i64 }* %154, i32 0, i32 1
-	%161 = load i64, i64* %160
-	%162 = add i64 %159, %161
-	%163 = call i8* @malloc(i64 %162)
-	%164 = getelementptr { i8*, i64 }, { i8*, i64 }* %149, i32 0, i32 0
-	%165 = load i8*, i8** %164
-	%166 = call i8* @strcat(i8* %163, i8* %165)
-	%167 = getelementptr { i8*, i64 }, { i8*, i64 }* %154, i32 0, i32 0
-	%168 = load i8*, i8** %167
-	%169 = call i8* @strcat(i8* %163, i8* %168)
-	%170 = alloca { i8*, i64 }
-	%171 = getelementptr { i8*, i64 }, { i8*, i64 }* %170, i32 0, i32 0
-	store i8* %163, i8** %171
-	%172 = getelementptr { i8*, i64 }, { i8*, i64 }* %170, i32 0, i32 1
-	store i64 %162, i64* %172
-	%173 = getelementptr { i8*, i64 }, { i8*, i64 }* %170, i32 0, i32 0
-	%174 = load i8*, i8** %173
-	call void @printf(i8* %174)
-	br label %146
+180:
+	%181 = alloca [11 x i8]
+	store [11 x i8] c"falsefalse\00", [11 x i8]* %181
+	%182 = alloca { i8*, i64 }
+	%183 = getelementptr [11 x i8], [11 x i8]* %181, i32 0, i32 0
+	%184 = getelementptr { i8*, i64 }, { i8*, i64 }* %182, i32 0, i32 0
+	store i8* %183, i8** %184
+	%185 = getelementptr { i8*, i64 }, { i8*, i64 }* %182, i32 0, i32 1
+	store i64 11, i64* %185
+	%186 = alloca [2 x i8]
+	store [2 x i8] c"\0A\00", [2 x i8]* %186
+	%187 = alloca { i8*, i64 }
+	%188 = getelementptr [2 x i8], [2 x i8]* %186, i32 0, i32 0
+	%189 = getelementptr { i8*, i64 }, { i8*, i64 }* %187, i32 0, i32 0
+	store i8* %188, i8** %189
+	%190 = getelementptr { i8*, i64 }, { i8*, i64 }* %187, i32 0, i32 1
+	store i64 2, i64* %190
+	%191 = getelementptr { i8*, i64 }, { i8*, i64 }* %182, i32 0, i32 1
+	%192 = load i64, i64* %191
+	%193 = getelementptr { i8*, i64 }, { i8*, i64 }* %187, i32 0, i32 1
+	%194 = load i64, i64* %193
+	%195 = add i64 %192, %194
+	%196 = call i8* @malloc(i64 %195)
+	%197 = getelementptr { i8*, i64 }, { i8*, i64 }* %182, i32 0, i32 0
+	%198 = load i8*, i8** %197
+	%199 = call i8* @strcat(i8* %196, i8* %198)
+	%200 = getelementptr { i8*, i64 }, { i8*, i64 }* %187, i32 0, i32 0
+	%201 = load i8*, i8** %200
+	%202 = call i8* @strcat(i8* %196, i8* %201)
+	%203 = alloca { i8*, i64 }
+	%204 = getelementptr { i8*, i64 }, { i8*, i64 }* %203, i32 0, i32 0
+	store i8* %196, i8** %204
+	%205 = getelementptr { i8*, i64 }, { i8*, i64 }* %203, i32 0, i32 1
+	store i64 %195, i64* %205
+	%206 = getelementptr { i8*, i64 }, { i8*, i64 }* %203, i32 0, i32 0
+	%207 = load i8*, i8** %206
+	call void @printf(i8* %207)
+	br label %148
 }

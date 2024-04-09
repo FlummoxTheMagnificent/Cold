@@ -257,7 +257,20 @@ func Parse(program [][]any, indents []int) []any {
 					toParseIndents = append(toParseIndents, indents[i+1]-1)
 					i++
 				}
-				lines = append(lines, CodeBlock{"if", "", append([]any{parseexpr(line[1:last])}, Parse(toParse, toParseIndents)...)})
+				if len(program[i+1]) == 2 && typeof(program[i+1][0]) == "lex.Token" && program[i+1][0].(lex.Token).Key == "else" && typeof(program[i+1][1]) == "lex.Token" && program[i+1][1].(lex.Token).Key == ":" {
+					var toParseElse [][]any
+					var toParseIndentsElse []int
+					i++
+					start := i
+					for i+1 < len(program) && indents[i+1] > indents[start] {
+						toParseElse = append(toParseElse, program[i+1])
+						toParseIndentsElse = append(toParseIndentsElse, indents[i+1]-1)
+						i++
+					}
+					lines = append(lines, CodeBlock{"ifelse", "", []any{append([]any{parseexpr(line[1:last])}, Parse(toParse, toParseIndents)...), Parse(toParseElse, toParseIndentsElse)}})
+				} else {
+					lines = append(lines, CodeBlock{"if", "", append([]any{parseexpr(line[1:last])}, Parse(toParse, toParseIndents)...)})
+				}
 			} else {
 				fmt.Println("Error: expected ':' in 'if' statement")
 				os.Exit(1)
@@ -265,7 +278,8 @@ func Parse(program [][]any, indents []int) []any {
 		} else if len(line) > 1 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "(" {
 			lines = append(lines, parseexpr(line))
 		} else {
-			fmt.Println("Error: unexpected", line[0])
+			fmt.Println("Error: unexpected", line[0], "(expected definition or function call)")
+			os.Exit(1)
 		}
 		i++
 	}

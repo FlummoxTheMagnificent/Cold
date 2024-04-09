@@ -344,6 +344,23 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			lastentry = new
 			cond := eval(code.Code[0], v, f, m, entry, main)
 			entry.NewCondBr(cond, then, new)
+		} else if expr.(parse.CodeBlock).Key == "ifelse" {
+			code := expr.(parse.CodeBlock)
+
+			then := main.NewBlock("")
+			lastentry = then
+			new := main.NewBlock("")
+			evalToLlvm(code.Code[0].([]any)[1:], v, f, m, main)
+			lastentry.NewBr(new)
+
+			els := main.NewBlock("")
+			lastentry = els
+			evalToLlvm(code.Code[1].([]any), v, f, m, main)
+			lastentry.NewBr(new)
+			lastentry = new
+
+			cond := eval(code.Code[0].([]any)[0], v, f, m, entry, main)
+			entry.NewCondBr(cond, then, els)
 		}
 	} else if typeof(expr) == "parse.Keyword" {
 		variable, exists := (*v)[expr.(parse.Keyword).Key]
@@ -402,7 +419,6 @@ func CompileAndExecute(file string) {
 	lexed, indents := lex.Lex(file)
 	parsed := parse.Parse(lexed, indents)
 	llvm := astToLlvm(parsed)
-	//fmt.Println(llvm)
 
 	runLlvm(llvm)
 }

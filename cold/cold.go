@@ -188,15 +188,75 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				return entry.NewICmp(enum.IPredEQ, first, second)
 			} else if firstType == "float" && secondType == "float" {
 				return entry.NewFCmp(enum.FPredOEQ, first, second)
-			} else if firstType == "i64" && secondType == "float" {
-				return entry.NewFCmp(enum.FPredOEQ, first, second)
-			} else if firstType == "float" && secondType == "i64" {
-				return entry.NewFCmp(enum.FPredOEQ, first, second)
 			} else if firstType == "i1" && secondType == "i1" {
 				return entry.NewICmp(enum.IPredEQ, first, second)
 			}
-			fmt.Println("Error: cannot compare types", firstType, "and", secondType)
-			os.Exit(1)
+			return constant.NewInt(types.I1, 0)
+		} else if key.Expr == "!=" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
+			firstType := first.Type().String()
+			secondType := first.Type().String()
+			if firstType == "i64" && secondType == "i64" {
+				return entry.NewICmp(enum.IPredNE, first, second)
+			} else if firstType == "float" && secondType == "float" {
+				return entry.NewFCmp(enum.FPredONE, first, second)
+			} else if firstType == "i1" && secondType == "i1" {
+				return entry.NewICmp(enum.IPredNE, first, second)
+			}
+			return constant.NewInt(types.I1, 0)
+		} else if key.Expr == ">" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
+			firstType := first.Type().String()
+			secondType := first.Type().String()
+			if firstType == "i64" && secondType == "i64" {
+				return entry.NewICmp(enum.IPredSGT, first, second)
+			} else if firstType == "float" && secondType == "float" {
+				return entry.NewFCmp(enum.FPredOGT, first, second)
+			} else if firstType == "i1" && secondType == "i1" {
+				return entry.NewICmp(enum.IPredSGT, first, second)
+			}
+			return constant.NewInt(types.I1, 0)
+		} else if key.Expr == "<" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
+			firstType := first.Type().String()
+			secondType := second.Type().String()
+			if firstType == "i64" && secondType == "i64" {
+				return entry.NewICmp(enum.IPredSLT, first, second)
+			} else if firstType == "float" && secondType == "float" {
+				return entry.NewFCmp(enum.FPredOLT, first, second)
+			} else if firstType == "i1" && secondType == "i1" {
+				return entry.NewICmp(enum.IPredSLT, first, second)
+			}
+			return constant.NewInt(types.I1, 0)
+		} else if key.Expr == ">=" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
+			firstType := first.Type().String()
+			secondType := second.Type().String()
+			if firstType == "i64" && secondType == "i64" {
+				return entry.NewICmp(enum.IPredSGE, first, second)
+			} else if firstType == "float" && secondType == "float" {
+				return entry.NewFCmp(enum.FPredOGE, first, second)
+			} else if firstType == "i1" && secondType == "i1" {
+				return entry.NewICmp(enum.IPredSGE, first, second)
+			}
+			return constant.NewInt(types.I1, 0)
+		} else if key.Expr == "<=" {
+			first := eval(key.First, v, f, m, entry, main)
+			second := eval(key.Second, v, f, m, entry, main)
+			firstType := first.Type().String()
+			secondType := second.Type().String()
+			if firstType == "i64" && secondType == "i64" {
+				return entry.NewICmp(enum.IPredSLE, first, second)
+			} else if firstType == "float" && secondType == "float" {
+				return entry.NewFCmp(enum.FPredOLE, first, second)
+			} else if firstType == "i1" && secondType == "i1" {
+				return entry.NewICmp(enum.IPredSLE, first, second)
+			}
+			return constant.NewInt(types.I1, 0)
 		}
 	} else if typeof(expr) == "parse.Function" {
 		name := expr.(parse.Function).Name

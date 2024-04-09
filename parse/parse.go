@@ -132,7 +132,7 @@ func format(tokens []any) []any {
 				argcount = argcount[:len(argcount)-1]
 				output = append(output, f)
 			}
-		} else if i.(lex.Token).Key == "+" || i.(lex.Token).Key == "-" || i.(lex.Token).Key == "=" {
+		} else if i.(lex.Token).Key == "+" || i.(lex.Token).Key == "-" || i.(lex.Token).Key == "=" || i.(lex.Token).Key == "!=" || i.(lex.Token).Key == ">" || i.(lex.Token).Key == "<" || i.(lex.Token).Key == ">=" || i.(lex.Token).Key == "<=" {
 			if isexpr {
 				if i.(lex.Token).Key == "-" && !negate {
 					negate = true
@@ -142,7 +142,7 @@ func format(tokens []any) []any {
 					os.Exit(1)
 				}
 			}
-			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/" || queue[len(queue)-1].(lex.Token).Key == "+" || queue[len(queue)-1].(lex.Token).Key == "-" || queue[len(queue)-1] == "=") {
+			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/" || queue[len(queue)-1].(lex.Token).Key == "+" || queue[len(queue)-1].(lex.Token).Key == "-" || queue[len(queue)-1] == "=" || queue[len(queue)-1] == "!=" || queue[len(queue)-1] == ">" || queue[len(queue)-1] == "<" || queue[len(queue)-1] == ">=" || queue[len(queue)-1] == "<=") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -194,7 +194,7 @@ func parseexpr(expr []any) any {
 	for _, x := range expr {
 		if typeof(x) == "lex.Token" {
 			key := x.(lex.Token).Key
-			if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" {
+			if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" || key == "!=" || key == ">" || key == "<" || key == ">=" || key == "<=" {
 				if len(values) < 2 {
 					fmt.Println("Error: missing argument for", key)
 					os.Exit(1)

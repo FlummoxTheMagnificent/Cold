@@ -111,7 +111,7 @@ func format(tokens []any) []any {
 				os.Exit(1)
 			}
 			for {
-				if typeof(queue[len(queue)-1]) != "parse.Function" && queue[len(queue)-1].(lex.Token).Key == "(" {
+				if typeof(queue[len(queue)-1]) == "lex.Token" && queue[len(queue)-1].(lex.Token).Key == "(" {
 					queue = queue[:len(queue)-1]
 					break
 				} else if len(queue) == 1 {
@@ -121,7 +121,7 @@ func format(tokens []any) []any {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
-			if typeof(queue[len(queue)-1]) == "parse.Function" {
+			if len(queue) != 0 && typeof(queue[len(queue)-1]) == "parse.Function" {
 				f := queue[len(queue)-1].(Function)
 				queue = queue[:len(queue)-1]
 				if werevalues[len(werevalues)-1] {
@@ -138,7 +138,7 @@ func format(tokens []any) []any {
 					negate = true
 					continue
 				} else {
-					fmt.Println("Error: unexpected", i, "(expected value) on")
+					fmt.Println("Error: unexpected", i, "(expected value)")
 					os.Exit(1)
 				}
 			}

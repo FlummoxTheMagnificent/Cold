@@ -81,6 +81,18 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 		lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
 		entry.NewStore(len, lengep)
 		return strptr
+	} else if item.Type().String() == "i1" {
+		zero := constant.NewInt(types.I32, 0)
+		new := entry.NewCall((*f)["booltoint"], item)
+		len := entry.NewCall((*f)["intlen"], new)
+		str := entry.NewCall((*f)["strmalloc"], len)
+		entry.NewCall((*f)["itoa"], str, new)
+		strptr := entry.NewAlloca(strtype)
+		newstrgep := entry.NewGetElementPtr(strtype, strptr, zero, zero)
+		entry.NewStore(str, newstrgep)
+		lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
+		entry.NewStore(len, lengep)
+		return strptr
 	} else if item.Type().String() == "float" {
 		zero := constant.NewInt(types.I32, 0)
 		len := entry.NewCall((*f)["floatlen"], item)
@@ -93,7 +105,7 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 		entry.NewStore(len, lengep)
 		return strptr
 	}
-	fmt.Println("Failed to convert", item, "to type string")
+	fmt.Println("Error: failed to convert", item, "to type string")
 	os.Exit(1)
 	return nil
 }
@@ -170,17 +182,21 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 		} else if key.Expr == "=" {
 			first := eval(key.First, v, f, m, entry, main)
 			second := eval(key.Second, v, f, m, entry, main)
-			firstType := typeof(first)[10:]
-			secondType := typeof(second)[10:]
-			if firstType == "Int" && secondType == "Int" {
+			firstType := first.Type().String()
+			secondType := first.Type().String()
+			if firstType == "i64" && secondType == "i64" {
 				return entry.NewICmp(enum.IPredEQ, first, second)
-			} else if firstType == "Float" && secondType == "Float" {
+			} else if firstType == "float" && secondType == "float" {
 				return entry.NewFCmp(enum.FPredOEQ, first, second)
-			} else if firstType == "Int" && secondType == "Float" {
+			} else if firstType == "i64" && secondType == "float" {
 				return entry.NewFCmp(enum.FPredOEQ, first, second)
-			} else if firstType == "Float" && secondType == "Int" {
+			} else if firstType == "float" && secondType == "i64" {
 				return entry.NewFCmp(enum.FPredOEQ, first, second)
+			} else if firstType == "i1" && secondType == "i1" {
+				return entry.NewICmp(enum.IPredEQ, first, second)
 			}
+			fmt.Println("Error: cannot compare types", firstType, "and", secondType)
+			os.Exit(1)
 		}
 	} else if typeof(expr) == "parse.Function" {
 		name := expr.(parse.Function).Name
@@ -286,8 +302,8 @@ func builtinFuncs(f *map[string]*ir.Func, m *ir.Module) {
 	(*f)["itoa"] = m.NewFunc("itoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I64))
 	(*f)["floatlen"] = m.NewFunc("floatlen", types.I64, ir.NewParam("p1", types.Float))
 	(*f)["ftoa"] = m.NewFunc("ftoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.Float))
-	(*f)["snprintf"] = m.NewFunc("snprintf", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I64), ir.NewParam("p3", types.I8Ptr), ir.NewParam("p4", types.Float))
 	(*f)["strmalloc"] = m.NewFunc("malloc", types.I8Ptr, ir.NewParam("p1", types.I64))
+	(*f)["booltoint"] = m.NewFunc("booltoint", types.I64, ir.NewParam("p1", types.I1))
 }
 func astToLlvm(program []any) string {
 	variables := make(map[string]vari)

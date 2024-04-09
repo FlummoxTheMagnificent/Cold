@@ -26,6 +26,19 @@ type vari struct {
 func typeof(item any) string {
 	return fmt.Sprintf("%T", item)
 }
+func stroftype(typ types.Type) string {
+	typstr := typ.String()
+	if len(typstr) > 12 && typstr[:13] == "{ i8*, i64 }*" {
+		return "string" + typstr[13:]
+	}
+	if len(typstr) > 2 && typstr[:3] == "i64" {
+		return "int" + typstr[3:]
+	}
+	if len(typstr) > 1 && typstr[:2] == "i1" {
+		return "bool" + typstr[2:]
+	}
+	return typstr
+}
 
 func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, main *ir.Func, indent int) {
 	for _, line := range program {
@@ -328,7 +341,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			item := eval(code.Code[0], v, f, m, entry, main, indent)
 			typ := prev.ptr.Type().String()
 			if item.Type().String() != typ[:len(typ)-1] {
-				fmt.Println("Error: wrong value type for", code.Data, "(expected", typ[:len(typ)-1], "but received", item.Type().String()+")")
+				fmt.Println("Error: wrong value type for", code.Data, "(expected", stroftype(prev.typ), "but received", stroftype(item.Type())+")")
 				os.Exit(1)
 			}
 			entry.NewStore(item, (*v)[code.Data].ptr)

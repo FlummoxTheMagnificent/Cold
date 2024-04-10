@@ -275,6 +275,34 @@ func Parse(program [][]any, indents []int) []any {
 				fmt.Println("Error: expected ':' in 'if' statement")
 				os.Exit(1)
 			}
+		} else if typeof(line[0]) == "lex.Token" && line[0].(lex.Token).Key == "while" {
+			if len(line) < 3 {
+				if len(line) == 2 {
+					if typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == ":" {
+						fmt.Println("Error: expected condition in 'while' statement")
+					} else {
+						fmt.Println("Error: missing ':' in 'while' statement")
+					}
+				} else {
+					fmt.Println("Error: unexpected 'while'")
+				}
+				os.Exit(1)
+			}
+			last := len(line) - 1
+			if typeof(line[last]) == "lex.Token" && line[last].(lex.Token).Key == ":" {
+				var toParse [][]any
+				var toParseIndents []int
+				start := i
+				for i+1 < len(program) && indents[i+1] > indents[start] {
+					toParse = append(toParse, program[i+1])
+					toParseIndents = append(toParseIndents, indents[i+1]-1)
+					i++
+				}
+				lines = append(lines, CodeBlock{"while", "", append([]any{parseexpr(line[1:last])}, Parse(toParse, toParseIndents)...)})
+			} else {
+				fmt.Println("Error: expected ':' in 'while' statement")
+				os.Exit(1)
+			}
 		} else if len(line) > 1 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "(" {
 			lines = append(lines, parseexpr(line))
 		} else {

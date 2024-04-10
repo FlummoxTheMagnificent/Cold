@@ -16,6 +16,7 @@ import (
 )
 
 var strtype = types.NewStruct(types.I8Ptr, types.I64)
+var lastentry *ir.Block
 
 type vari struct {
 	ptr   value.Value
@@ -130,9 +131,6 @@ func clean(v *map[string]vari, indent int) {
 		}
 	}
 }
-
-var lastentry *ir.Block
-
 func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, entry *ir.Block, main *ir.Func, indent int) value.Value {
 	if typeof(expr) == "string" {
 		return parseStr(expr.(string), entry)
@@ -385,6 +383,18 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 
 			cond := eval(code.Code[0].([]any)[0], v, f, m, entry, main, indent+1)
 			entry.NewCondBr(cond, then, els)
+		} else if expr.(parse.CodeBlock).Key == "while" {
+			code := expr.(parse.CodeBlock)
+			loop := main.NewBlock("")
+			lastentry = loop
+			evalToLlvm(code.Code[1:], v, f, m, main, indent+1)
+			clean(v, indent)
+			new := main.NewBlock("")
+			cond := eval(code.Code[0], v, f, m, loop, main, indent+1)
+			loop.NewCondBr(cond, loop, new)
+			lastentry = new
+			cond = eval(code.Code[0], v, f, m, entry, main, indent+1)
+			entry.NewCondBr(cond, loop, new)
 		}
 	} else if typeof(expr) == "parse.Keyword" {
 		variable, exists := (*v)[expr.(parse.Keyword).Key]

@@ -8,19 +8,25 @@ Lines starting with `#` are considered comments and will be ignored. You can als
 Variables are assigned using `:=` and reassigned using `=`. They can hold types int, float, string, or bool.
 
 ## If Statements
-If statements have the same syntax as python:
+If statements have the same syntax as Python:
 ```
-if (condition):
-	(code)
+if [condition]:
+	[code]
 ```
-Else statements are optional, and can be written:
+Else statements are optional, and can be written as:
 ```
-if (condition):
-	(code)
+if [condition]:
+	[code]
 else:
-	(other code)
+	[other code]
 ```
 
+## While Loops
+While loops, like if statements, are similar to Python:
+```
+while [condition]:
+	[code]
+```
 ## Built-in Functions
 - `println()`: Prints the given text followed by a newline. Accepts any number of arguments, which are automatically joined.
 - `print()`: Works like `println()` but without the newline.

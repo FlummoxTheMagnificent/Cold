@@ -148,11 +148,11 @@ func format(tokens []any) []any {
 			}
 			queue = append(queue, i)
 			isexpr = true
-		} else if i.(lex.Token).Key == "*" || i.(lex.Token).Key == "/" {
+		} else if i.(lex.Token).Key == "*" || i.(lex.Token).Key == "/" || i.(lex.Token).Key == "%" {
 			if isexpr {
 				fmt.Println("Error: unexpected", i, "(expected value)")
 			}
-			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/") {
+			for len(queue) > 0 && (queue[len(queue)-1].(lex.Token).Key == "*" || queue[len(queue)-1].(lex.Token).Key == "/" || queue[len(queue)-1].(lex.Token).Key == "%") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -160,7 +160,7 @@ func format(tokens []any) []any {
 			isexpr = true
 		} else {
 			if !isexpr {
-				fmt.Println("Error: unexpected", i, "(expected Expression)")
+				fmt.Println("Error: unexpected", i, "(expected operator)")
 				os.Exit(1)
 			}
 			prev = i.(lex.Token).Key
@@ -194,7 +194,7 @@ func parseexpr(expr []any) any {
 	for _, x := range expr {
 		if typeof(x) == "lex.Token" {
 			key := x.(lex.Token).Key
-			if key == "+" || key == "-" || key == "*" || key == "/" || key == "=" || key == "!=" || key == ">" || key == "<" || key == ">=" || key == "<=" {
+			if key == "+" || key == "-" || key == "*" || key == "/" || key == "%" || key == "=" || key == "!=" || key == ">" || key == "<" || key == ">=" || key == "<=" {
 				if len(values) < 2 {
 					fmt.Println("Error: missing argument for", key)
 					os.Exit(1)
@@ -213,9 +213,9 @@ func parseexpr(expr []any) any {
 	}
 	if len(values) != 1 {
 		if len(values) == 0 {
-			fmt.Println("Error: missing Expression")
+			fmt.Println("Error: missing expression")
 		} else {
-			fmt.Println("Error: failed to parse Expression")
+			fmt.Println("Error: failed to parse expression")
 		}
 		os.Exit(1)
 	}

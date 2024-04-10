@@ -32,3 +32,19 @@ while [condition]:
 - `print()`: Works like `println()` but without the newline.
 - `typeof()`: Accepts one argument and returns the type of the given variable.
 - `str()`: Converts one item to a string
+
+# Example Programs
+Example FizzBuzz program:
+```
+i := 0
+while i < 100:
+	i = i + 1
+	value := ""
+	if (i % 3) = 0:
+		value = value + "Fizz"
+	if (i % 5) = 0:
+		value = value + "Buzz"
+	if value = "":
+		value = value + i
+	println(value)
+```

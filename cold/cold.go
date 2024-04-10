@@ -153,8 +153,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				return entry.NewFAdd(entry.NewSIToFP(first, types.Float), second)
 			} else if firstType == "float" && secondType == "i64" {
 				return entry.NewFAdd(first, entry.NewSIToFP(second, types.Float))
-			} else if firstType == "{ i8*, i64 }*" && secondType == "{ i8*, i64 }*" {
-				return strJoin(first, second, entry, f)
+			} else if firstType == "{ i8*, i64 }*" || secondType == "{ i8*, i64 }*" {
+				return strJoin(str(first, entry, f), str(second, entry, f), entry, f)
 			}
 		} else if key.Expr == "-" {
 			first := eval(key.First, v, f, m, entry, main, indent)
@@ -198,6 +198,20 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			} else if firstType == "float" && secondType == "i64" {
 				return entry.NewFDiv(first, entry.NewSIToFP(second, types.Float))
 			}
+		} else if key.Expr == "%" {
+			first := eval(key.First, v, f, m, entry, main, indent)
+			second := eval(key.Second, v, f, m, entry, main, indent)
+			firstType := first.Type().String()
+			secondType := second.Type().String()
+			if firstType == "i64" && secondType == "i64" {
+				return entry.NewSRem(first, second)
+			} else if firstType == "float" && secondType == "float" {
+				return entry.NewFRem(first, second)
+			} else if firstType == "i64" && secondType == "float" {
+				return entry.NewFRem(entry.NewSIToFP(first, types.Float), second)
+			} else if firstType == "float" && secondType == "i64" {
+				return entry.NewFRem(first, entry.NewSIToFP(second, types.Float))
+			}
 		} else if key.Expr == "=" {
 			first := eval(key.First, v, f, m, entry, main, indent)
 			second := eval(key.Second, v, f, m, entry, main, indent)
@@ -209,6 +223,11 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				return entry.NewFCmp(enum.FPredOEQ, first, second)
 			} else if firstType == "i1" && secondType == "i1" {
 				return entry.NewICmp(enum.IPredEQ, first, second)
+			} else if firstType == "{ i8*, i64 }*" && secondType == "{ i8*, i64 }*" {
+				zero := constant.NewInt(types.I32, 0)
+				first = entry.NewLoad(types.I8Ptr, entry.NewGetElementPtr(strtype, first, zero, zero))
+				second = entry.NewLoad(types.I8Ptr, entry.NewGetElementPtr(strtype, second, zero, zero))
+				return entry.NewICmp(enum.IPredEQ, constant.NewInt(types.I8, 0), entry.NewCall((*f)["strcmp"], first, second))
 			}
 			return constant.NewInt(types.I1, 0)
 		} else if key.Expr == "!=" {
@@ -328,12 +347,13 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			fmt.Println("Error: unrecognized function '" + name + "()'")
 			os.Exit(1)
 		}
+		return nil
 	} else if typeof(expr) == "parse.CodeBlock" {
 		if expr.(parse.CodeBlock).Key == "setvar" {
 			code := expr.(parse.CodeBlock)
 			prev, exists := (*v)[code.Data]
 			if !exists {
-				fmt.Println("Error: use of undeclared", code.Data, "(possibly out of scope)")
+				fmt.Println("Error: assignment of undeclared", code.Data, "(possibly out of scope)")
 				os.Exit(1)
 			}
 			item := eval(code.Code[0], v, f, m, entry, main, indent)
@@ -381,7 +401,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			lastentry.NewBr(new)
 			lastentry = new
 
-			cond := eval(code.Code[0].([]any)[0], v, f, m, entry, main, indent+1)
+			cond := eval(code.Code[0].([]any)[0], v, f, m, entry, main, indent)
 			entry.NewCondBr(cond, then, els)
 		} else if expr.(parse.CodeBlock).Key == "while" {
 			code := expr.(parse.CodeBlock)
@@ -390,12 +410,13 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			evalToLlvm(code.Code[1:], v, f, m, main, indent+1)
 			clean(v, indent)
 			new := main.NewBlock("")
-			cond := eval(code.Code[0], v, f, m, loop, main, indent+1)
-			loop.NewCondBr(cond, loop, new)
+			cond := eval(code.Code[0], v, f, m, lastentry, main, indent)
+			lastentry.NewCondBr(cond, loop, new)
 			lastentry = new
-			cond = eval(code.Code[0], v, f, m, entry, main, indent+1)
+			cond = eval(code.Code[0], v, f, m, entry, main, indent)
 			entry.NewCondBr(cond, loop, new)
 		}
+		return nil
 	} else if typeof(expr) == "parse.Keyword" {
 		variable, exists := (*v)[expr.(parse.Keyword).Key]
 		if !exists {
@@ -404,11 +425,14 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 		}
 		return entry.NewLoad(variable.typ, variable.ptr)
 	}
+	fmt.Println("Error: failed to parse", expr)
+	os.Exit(1)
 	return nil
 }
 func builtinFuncs(f *map[string]*ir.Func, m *ir.Module) {
 	(*f)["print"] = m.NewFunc("printf", types.Void, ir.NewParam("p1", types.I8Ptr))
 	(*f)["strcat"] = m.NewFunc("strcat", types.I8Ptr, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I8Ptr))
+	(*f)["strcmp"] = m.NewFunc("strcmp", types.I8, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I8Ptr))
 	(*f)["intlen"] = m.NewFunc("intlen", types.I64, ir.NewParam("p1", types.I64))
 	(*f)["itoa"] = m.NewFunc("itoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.I64))
 	(*f)["floatlen"] = m.NewFunc("floatlen", types.I64, ir.NewParam("p1", types.Float))

@@ -40,11 +40,12 @@ i := 0
 while i < 100:
 	i = i + 1
 	value := ""
-	if (i % 3) = 0:
-		value = value + "Fizz"
-	if (i % 5) = 0:
+	if i % 3 = 0:
+		value = "Fizz"
+	if i % 5 = 0:
 		value = value + "Buzz"
 	if value = "":
-		value = value + i
-	println(value)
+		println(i)
+	else:
+		println(value)
 ```

@@ -34,7 +34,7 @@ while [condition]:
 - `str()`: Converts one item to a string
 
 # Example Programs
-Example FizzBuzz program:
+### Example FizzBuzz program:
 ```
 i := 0
 while i < 100:

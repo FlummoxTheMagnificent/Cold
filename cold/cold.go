@@ -457,7 +457,11 @@ func astToLlvm(program []any) string {
 }
 func runLlvm(llvm string) {
 	os.WriteFile("program.ll", []byte(llvm), 0644)
-	cmd := exec.Command("llc", "-filetype=obj", "program.ll", "-o=program.o", "-O3")
+	cmd := exec.Command("clang", "-O3", "-emit-llvm", "-S", "program.ll")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+	cmd = exec.Command("llc", "-filetype=obj", "program.ll", "-o=program.o", "-O3")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()

@@ -344,7 +344,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			}
 			return entry.NewCall(function, list...)
 		} else {
-			fmt.Println("Error: unrecognized function '" + name + "()'")
+			fmt.Println("Error: undefined function '" + name + "()'")
 			os.Exit(1)
 		}
 		return nil
@@ -471,7 +471,7 @@ func runLlvm(llvm string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	os.Remove("program")
+	//os.Remove("program")
 }
 func CompileAndExecute(file string) {
 	lexed, indents := lex.Lex(file)

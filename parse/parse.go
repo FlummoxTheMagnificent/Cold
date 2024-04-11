@@ -239,6 +239,8 @@ func Parse(program [][]any, indents []int) []any {
 		}
 		if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "=" {
 			lines = append(lines, CodeBlock{"setvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
+		} else if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "+=" {
+			lines = append(lines, CodeBlock{"setvar", line[0].(lex.Token).Key, []any{parseexpr(append([]any{line[0], lex.Token{Key: "+"}}, line[2:]...))}})
 		} else if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == ":=" {
 			lines = append(lines, CodeBlock{"newvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
 		} else if typeof(line[0]) == "lex.Token" && line[0].(lex.Token).Key == "if" {

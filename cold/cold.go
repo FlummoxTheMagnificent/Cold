@@ -21,7 +21,6 @@ var lastentry *ir.Block
 
 type vari struct {
 	ptr   value.Value
-	typ   types.Type
 	scope int
 }
 
@@ -138,13 +137,13 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 			return parseStr("{}", entry)
 		}
 
-		zero := constant.NewInt(types.I32, 0)
+		zero := constant.NewInt(types.I64, 0)
 		for i := uint64(0); i < len-1; i++ {
-			this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I32, int64(i)), zero)
+			this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I64, int64(i)), zero)
 			val = strJoin(val, str(entry.NewLoad(elemType, this), entry, f), entry, f)
 			val = strJoin(val, parseStr(", ", entry), entry, f)
 		}
-		this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I32, int64(len-1)), zero)
+		this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I64, int64(len-1)), zero)
 		val = strJoin(val, str(entry.NewLoad(elemType, this), entry, f), entry, f)
 		val = strJoin(val, parseStr("}", entry), entry, f)
 
@@ -335,26 +334,26 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			if len(args) == 0 {
 				return nil
 			}
-			arg := str(eval(args[0], v, f, m, entry, main, indent), entry, f)
+			fullArg := str(eval(args[0], v, f, m, entry, main, indent), entry, f)
 			for _, i := range args[1:] {
-				this := eval(i, v, f, m, entry, main, indent)
-				arg = strJoin(arg, str(this, entry, f), entry, f)
+				currentArg := eval(i, v, f, m, entry, main, indent)
+				fullArg = strJoin(fullArg, str(currentArg, entry, f), entry, f)
 			}
 			zero := constant.NewInt(types.I32, 0)
-			gep := entry.NewGetElementPtr(strtype, arg, zero, zero)
+			gep := entry.NewGetElementPtr(strtype, fullArg, zero, zero)
 			entry.NewCall((*f)["print"], entry.NewLoad(types.I8Ptr, gep))
 		} else if name == "println" {
 			if len(args) == 0 {
 				return nil
 			}
-			arg := str(eval(args[0], v, f, m, entry, main, indent), entry, f)
+			fullArg := str(eval(args[0], v, f, m, entry, main, indent), entry, f)
 			for _, i := range args[1:] {
-				this := eval(i, v, f, m, entry, main, indent)
-				arg = strJoin(arg, str(this, entry, f), entry, f)
+				currentArg := eval(i, v, f, m, entry, main, indent)
+				fullArg = strJoin(fullArg, str(currentArg, entry, f), entry, f)
 			}
-			arg = strJoin(arg, parseStr("\n", entry), entry, f)
+			fullArg = strJoin(fullArg, parseStr("\n", entry), entry, f)
 			zero := constant.NewInt(types.I32, 0)
-			gep := entry.NewGetElementPtr(strtype, arg, zero, zero)
+			gep := entry.NewGetElementPtr(strtype, fullArg, zero, zero)
 			entry.NewCall((*f)["print"], entry.NewLoad(types.I8Ptr, gep))
 		} else if name == "typeof" {
 			if len(args) != 1 {
@@ -367,33 +366,30 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				fmt.Println("Error: wrong argument count for str()")
 				os.Exit(1)
 			}
-			num := eval(args[0], v, f, m, entry, main, indent)
-			if num.Type().String() != "i64" {
-				fmt.Println("Error: invalid argument type (" + num.Type().String() + ") for function str() (expected int)")
-				os.Exit(1)
-			}
-			return str(num, entry, f)
+			arg := eval(args[0], v, f, m, entry, main, indent)
+			return str(arg, entry, f)
 		} else if name == "arr" {
-			len := len(args)
-			if len == 0 {
+			length := len(args)
+			if length == 0 {
 				return constant.NewArray(types.NewArray(0, types.Void))
 			}
-			first := eval(args[0], v, f, m, entry, main, indent)
-			typ := first.Type()
-			arrtype := types.NewArray(uint64(len), typ)
-			arr := entry.NewAlloca(arrtype)
+			firstArrayItem := eval(args[0], v, f, m, entry, main, indent)
+			arrayElementType := firstArrayItem.Type()
+			arrtype := types.NewArray(uint64(length), arrayElementType)
+			pointerToArray := entry.NewAlloca(arrtype)
 			zero := constant.NewInt(types.I32, 0)
-			entry.NewStore(first, entry.NewGetElementPtr(arrtype, arr, zero, zero))
+			pointerToFirstItem := entry.NewGetElementPtr(arrtype, pointerToArray, zero, zero)
+			entry.NewStore(firstArrayItem, pointerToFirstItem)
 			for i, item := range args[1:] {
-				gep := entry.NewGetElementPtr(arrtype, arr, constant.NewInt(types.I32, int64(i+1)), zero)
-				current := eval(item, v, f, m, entry, main, indent)
-				if current.Type().String() != typ.String() {
-					fmt.Println("Error: expected type", stroftype(typ), "in array but received type", stroftype(current.Type()))
+				pointerToIndex := entry.NewGetElementPtr(arrtype, pointerToArray, constant.NewInt(types.I32, int64(i+1)), zero)
+				currentItem := eval(item, v, f, m, entry, main, indent)
+				if currentItem.Type().String() != arrayElementType.String() {
+					fmt.Println("Error: expected type", stroftype(arrayElementType), "in array but received", stroftype(currentItem.Type()))
 					os.Exit(1)
 				}
-				entry.NewStore(current, gep)
+				entry.NewStore(currentItem, pointerToIndex)
 			}
-			return arr
+			return pointerToArray
 		} else if name == "idx" {
 			if len(args) > 2 {
 				fmt.Println("Error: unexpected", len(args)-1, "indices (expected 1)")
@@ -403,9 +399,9 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				fmt.Println("Error: expected index")
 				os.Exit(1)
 			}
-			arr := eval(args[0], v, f, m, entry, main, indent)
-			if !(types.IsPointer(arr.Type()) && types.IsArray(arr.Type().(*types.PointerType).ElemType)) {
-				fmt.Println("Error: cannot find index from", stroftype(arr.Type()), "(can only find index from array)")
+			array := eval(args[0], v, f, m, entry, main, indent)
+			if !types.IsPointer(array.Type()) {
+				fmt.Println("Error: cannot find index from", stroftype(array.Type()), "(can only find index from array)")
 				os.Exit(1)
 			}
 			index := eval(args[1], v, f, m, entry, main, indent)
@@ -413,16 +409,16 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				fmt.Println("Error: cannot use value of type", stroftype(index.Type()), "to index into", args[0], "(expected int)")
 				os.Exit(1)
 			}
-			arrtyp := arr.Type().(*types.PointerType).ElemType
-			typ := arrtyp.(*types.ArrayType).ElemType
+			arrayType := array.Type().(*types.PointerType).ElemType
+			typ := arrayType.(*types.ArrayType).ElemType
 			zero := constant.NewInt(types.I32, 0)
-			return entry.NewLoad(typ, entry.NewGetElementPtr(arrtyp, arr, index, zero))
+			return entry.NewLoad(typ, entry.NewGetElementPtr(arrayType, array, index, zero))
 		} else if function, exists := (*f)[name]; exists {
-			list := make([]value.Value, len(args))
+			evalledArgs := make([]value.Value, len(args))
 			for i, item := range args {
-				list[i] = eval(item, v, f, m, entry, main, indent)
+				evalledArgs[i] = eval(item, v, f, m, entry, main, indent)
 			}
-			return entry.NewCall(function, list...)
+			return entry.NewCall(function, evalledArgs...)
 		} else {
 			fmt.Println("Error: undefined function '" + name + "()'")
 			os.Exit(1)
@@ -430,29 +426,28 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 		return nil
 	} else if typeof(expr) == "parse.CodeBlock" {
 		if expr.(parse.CodeBlock).Key == "setvar" {
-			code := expr.(parse.CodeBlock)
-			prev, exists := (*v)[code.Data]
+			declaration := expr.(parse.CodeBlock)
+			prev, exists := (*v)[declaration.Data]
 			if !exists {
-				fmt.Println("Error: assignment of undeclared", code.Data, "(possibly out of scope)")
+				fmt.Println("Error: assignment of undeclared", declaration.Data, "(possibly out of scope)")
 				os.Exit(1)
 			}
-			item := eval(code.Code[0], v, f, m, entry, main, indent)
-			typ := prev.ptr.Type().String()
-			if item.Type().String() != typ[:len(typ)-1] {
-				fmt.Println("Error: wrong value type for", code.Data, "(expected", stroftype(prev.typ), "but received", stroftype(item.Type())+")")
+			val := eval(declaration.Code[0], v, f, m, entry, main, indent)
+			if !val.Type().Equal(prev.ptr.Type().(*types.PointerType).ElemType) {
+				fmt.Println("Error: wrong value type for", declaration.Data, "(expected", stroftype(prev.ptr.Type()), "but received", stroftype(val.Type())+")")
 				os.Exit(1)
 			}
-			entry.NewStore(item, (*v)[code.Data].ptr)
+			entry.NewStore(val, (*v)[declaration.Data].ptr)
 		} else if expr.(parse.CodeBlock).Key == "newvar" {
-			code := expr.(parse.CodeBlock)
-			if _, exists := (*v)[code.Data]; exists {
-				fmt.Println("Error: already declared", code.Data)
+			declaration := expr.(parse.CodeBlock)
+			if _, exists := (*v)[declaration.Data]; exists {
+				fmt.Println("Error: already declared", declaration.Data)
 				os.Exit(1)
 			}
-			item := eval(code.Code[0], v, f, m, entry, main, indent)
-			ptr := entry.NewAlloca(item.Type())
-			(*v)[code.Data] = vari{ptr, item.Type(), indent}
-			entry.NewStore(item, ptr)
+			val := eval(declaration.Code[0], v, f, m, entry, main, indent)
+			new := entry.NewAlloca(val.Type())
+			entry.NewStore(val, new)
+			(*v)[declaration.Data] = vari{new, indent}
 		} else if expr.(parse.CodeBlock).Key == "if" {
 			code := expr.(parse.CodeBlock)
 			then := main.NewBlock("")
@@ -462,8 +457,8 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			new := main.NewBlock("")
 			lastentry.NewBr(new)
 			lastentry = new
-			cond := eval(code.Code[0], v, f, m, entry, main, indent+1)
-			entry.NewCondBr(cond, then, new)
+			condition := eval(code.Code[0], v, f, m, entry, main, indent+1)
+			entry.NewCondBr(condition, then, new)
 		} else if expr.(parse.CodeBlock).Key == "ifelse" {
 			code := expr.(parse.CodeBlock)
 
@@ -484,16 +479,16 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			cond := eval(code.Code[0].([]any)[0], v, f, m, entry, main, indent)
 			entry.NewCondBr(cond, then, els)
 		} else if expr.(parse.CodeBlock).Key == "while" {
-			code := expr.(parse.CodeBlock)
+			codeToLoop := expr.(parse.CodeBlock)
 			loop := main.NewBlock("")
 			lastentry = loop
-			evalToLlvm(code.Code[1:], v, f, m, main, indent+1)
+			evalToLlvm(codeToLoop.Code[1:], v, f, m, main, indent+1)
 			clean(v, indent)
 			new := main.NewBlock("")
-			cond := eval(code.Code[0], v, f, m, lastentry, main, indent)
+			cond := eval(codeToLoop.Code[0], v, f, m, lastentry, main, indent)
 			lastentry.NewCondBr(cond, loop, new)
 			lastentry = new
-			cond = eval(code.Code[0], v, f, m, entry, main, indent)
+			cond = eval(codeToLoop.Code[0], v, f, m, entry, main, indent)
 			entry.NewCondBr(cond, loop, new)
 		}
 		return nil
@@ -503,7 +498,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			fmt.Println("Error: use of undeclared", expr.(parse.Keyword).Key, "(possibly out of scope)")
 			os.Exit(1)
 		}
-		return entry.NewLoad(variable.typ, variable.ptr)
+		return entry.NewLoad(variable.ptr.Type().(*types.PointerType).ElemType, variable.ptr)
 	}
 	fmt.Println("Error: failed to parse", expr)
 	os.Exit(1)
@@ -541,7 +536,7 @@ func runLlvm(llvm string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	//os.Remove("program.ll")
+	os.Remove("program.ll")
 	cmd = exec.Command("clang", "program.o", "../cold-c/cold-c.o", "-oprogram", "-O3")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -551,7 +546,6 @@ func runLlvm(llvm string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	//os.Remove("program")
 }
 func CompileAndExecute(file string) {
 	lexed, indents := lex.Lex(file)

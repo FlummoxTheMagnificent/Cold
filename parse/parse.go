@@ -71,7 +71,7 @@ func format(tokens []any) []any {
 		}
 		if typeof(i) == "int" || typeof(i) == "float64" || typeof(i) == "string" {
 			if !(isexpr || (output == nil && queue == nil)) {
-				fmt.Println("Error: unexpected", i, isexpr)
+				fmt.Println("Error: unexpected", i)
 				os.Exit(1)
 			}
 			if negate {
@@ -348,7 +348,7 @@ func Parse(program [][]any, indents []int) []any {
 					toParseIndents = append(toParseIndents, indents[i+1]-1)
 					i++
 				}
-				if len(program[i+1]) == 2 && typeof(program[i+1][0]) == "lex.Token" && program[i+1][0].(lex.Token).Key == "else" && typeof(program[i+1][1]) == "lex.Token" && program[i+1][1].(lex.Token).Key == ":" {
+				if len(program) > i+1 && len(program[i+1]) == 2 && typeof(program[i+1][0]) == "lex.Token" && program[i+1][0].(lex.Token).Key == "else" && typeof(program[i+1][1]) == "lex.Token" && program[i+1][1].(lex.Token).Key == ":" {
 					var toParseElse [][]any
 					var toParseIndentsElse []int
 					i++

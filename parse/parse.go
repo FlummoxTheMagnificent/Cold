@@ -44,6 +44,10 @@ func format(tokens []any) []any {
 	var prev string
 	for _, i := range tokens {
 		if prev != "" {
+			if negate {
+				fmt.Println("Error: unexpected '-'")
+				os.Exit(1)
+			}
 			if typeof(i) == "lex.Token" && i.(lex.Token).Key == "(" {
 				queue = append(queue, Function{prev, []any{}, 0})
 				argcount = append(argcount, 0)
@@ -90,13 +94,13 @@ func format(tokens []any) []any {
 				werevalues[len(werevalues)-1] = true
 			}
 		} else if i.(lex.Token).Key == "," {
-			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "parse.Function" || queue[len(queue)-1].(lex.Token).Key != "(") {
+			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "parse.Function" || queue[len(queue)-1].(lex.Token).Key != "(" && queue[len(queue)-1].(lex.Token).Key != "{") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
 			isexpr = true
 			if len(werevalues) == 0 {
-				fmt.Println("Error: unexpected,")
+				fmt.Println("Error: unexpected ,")
 				os.Exit(1)
 			}
 			if werevalues[len(werevalues)-1] {
@@ -105,6 +109,14 @@ func format(tokens []any) []any {
 			}
 		} else if i.(lex.Token).Key == "(" {
 			queue = append(queue, i)
+		} else if i.(lex.Token).Key == "{" {
+			queue = append(queue, Function{"arr", []any{}, 0})
+			queue = append(queue, i)
+			argcount = append(argcount, 0)
+			if len(werevalues) > 0 {
+				werevalues[len(werevalues)-1] = true
+			}
+			werevalues = append(werevalues, false)
 		} else if i.(lex.Token).Key == ")" {
 			if len(queue) == 0 {
 				fmt.Println("Error: missing (")
@@ -132,6 +144,32 @@ func format(tokens []any) []any {
 				argcount = argcount[:len(argcount)-1]
 				output = append(output, f)
 			}
+		} else if i.(lex.Token).Key == "}" {
+			if len(queue) == 0 {
+				fmt.Println(output)
+				fmt.Println("Error: missing {")
+				os.Exit(1)
+			}
+			for {
+				if typeof(queue[len(queue)-1]) == "lex.Token" && queue[len(queue)-1].(lex.Token).Key == "{" {
+					queue = queue[:len(queue)-1]
+					break
+				} else if len(queue) == 1 {
+					fmt.Println("Error: missing {")
+					os.Exit(1)
+				}
+				output = append(output, queue[len(queue)-1])
+				queue = queue[:len(queue)-1]
+			}
+			f := queue[len(queue)-1].(Function)
+			queue = queue[:len(queue)-1]
+			if werevalues[len(werevalues)-1] {
+				f.argcount = argcount[len(argcount)-1] + 1
+			} else {
+				f.argcount = argcount[len(argcount)-1]
+			}
+			argcount = argcount[:len(argcount)-1]
+			output = append(output, f)
 		} else if i.(lex.Token).Key == "+" || i.(lex.Token).Key == "-" {
 			if isexpr {
 				if i.(lex.Token).Key == "-" && !negate {
@@ -249,6 +287,8 @@ func Parse(program [][]any, indents []int) []any {
 			lines = append(lines, CodeBlock{"setvar", line[0].(lex.Token).Key, []any{parseexpr(append([]any{line[0], lex.Token{Key: "/"}}, line[2:]...))}})
 		} else if len(line) > 2 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == ":=" {
 			lines = append(lines, CodeBlock{"newvar", line[0].(lex.Token).Key, []any{parseexpr(line[2:])}})
+		} else if len(line) > 1 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "(" {
+			lines = append(lines, parseexpr(line))
 		} else if typeof(line[0]) == "lex.Token" && line[0].(lex.Token).Key == "if" {
 			if len(line) < 3 {
 				if len(line) == 2 {
@@ -318,8 +358,6 @@ func Parse(program [][]any, indents []int) []any {
 				fmt.Println("Error: expected ':' in 'while' statement")
 				os.Exit(1)
 			}
-		} else if len(line) > 1 && typeof(line[0]) == "lex.Token" && typeof(line[1]) == "lex.Token" && line[1].(lex.Token).Key == "(" {
-			lines = append(lines, parseexpr(line))
 		} else {
 			fmt.Println("Error: unexpected", line[0], "(expected definition or function call)")
 			os.Exit(1)

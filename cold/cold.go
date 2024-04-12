@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 
 	"github.com/FlummoxTheMagnificent/Cold/tree/main/lex"
 	"github.com/FlummoxTheMagnificent/Cold/tree/main/parse"
@@ -40,7 +42,6 @@ func stroftype(typ types.Type) string {
 	}
 	return typstr
 }
-
 func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, main *ir.Func, indent int) {
 	for _, line := range program {
 		eval(line, v, f, m, lastentry, main, indent)
@@ -108,7 +109,7 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 		lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
 		entry.NewStore(len, lengep)
 		return strptr
-	} else if item.Type().String() == "float" {
+	} else if types.IsFloat(item.Type()) {
 		zero := constant.NewInt(types.I32, 0)
 		len := entry.NewCall((*f)["floatlen"], item)
 		str := entry.NewCall((*f)["strmalloc"], len)
@@ -119,6 +120,34 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 		lengep := entry.NewGetElementPtr(strtype, strptr, zero, constant.NewInt(types.I32, 1))
 		entry.NewStore(len, lengep)
 		return strptr
+	} else if item.Type().String()[0] == '[' {
+		val := parseStr("{", entry)
+
+		typ := item.Type().String()
+		split := strings.Fields(typ[1 : len(typ)-2])
+		len, _ := strconv.Atoi(split[0])
+
+		realType := item.Type().(*types.PointerType).ElemType
+
+		elemType := realType.(*types.ArrayType).ElemType
+
+		if len == 0 {
+			return parseStr("{}", entry)
+		}
+
+		zero := constant.NewInt(types.I32, 0)
+		for i := 0; i < len-1; i++ {
+			this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I32, int64(i)), zero)
+			val = strJoin(val, str(entry.NewLoad(elemType, this), entry, f), entry, f)
+			val = strJoin(val, parseStr(", ", entry), entry, f)
+		}
+		this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I32, int64(len-1)), zero)
+		val = strJoin(val, str(entry.NewLoad(elemType, this), entry, f), entry, f)
+		val = strJoin(val, parseStr("}", entry), entry, f)
+
+		return val
+	} else if types.IsVoid(item.Type()) {
+		return parseStr("void", entry)
 	}
 	fmt.Println("Error: failed to convert", item, "to type string")
 	os.Exit(1)
@@ -337,6 +366,27 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				os.Exit(1)
 			}
 			return str(num, entry, f)
+		} else if name == "arr" {
+			len := len(args)
+			if len == 0 {
+				return constant.NewArray(types.NewArray(0, types.Void))
+			}
+			first := eval(args[0], v, f, m, entry, main, indent)
+			typ := first.Type()
+			arrtype := types.NewArray(uint64(len), typ)
+			arr := entry.NewAlloca(arrtype)
+			zero := constant.NewInt(types.I32, 0)
+			entry.NewStore(first, entry.NewGetElementPtr(arrtype, arr, zero, zero))
+			for i, item := range args[1:] {
+				gep := entry.NewGetElementPtr(arrtype, arr, constant.NewInt(types.I32, int64(i+1)), zero)
+				current := eval(item, v, f, m, entry, main, indent)
+				if current.Type().String() != typ.String() {
+					fmt.Println("Error: expected type", stroftype(typ), "in array but received type", stroftype(current.Type()))
+					os.Exit(1)
+				}
+				entry.NewStore(current, gep)
+			}
+			return arr
 		} else if function, exists := (*f)[name]; exists {
 			list := make([]value.Value, len(args))
 			for i, item := range args {
@@ -461,7 +511,7 @@ func runLlvm(llvm string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	os.Remove("program.ll")
+	//os.Remove("program.ll")
 	cmd = exec.Command("clang", "program.o", "../cold-c/cold-c.o", "-oprogram", "-O3")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

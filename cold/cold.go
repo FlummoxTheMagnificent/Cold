@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/FlummoxTheMagnificent/Cold/tree/main/lex"
 	"github.com/FlummoxTheMagnificent/Cold/tree/main/parse"
@@ -30,17 +29,25 @@ func typeof(item any) string {
 	return fmt.Sprintf("%T", item)
 }
 func stroftype(typ types.Type) string {
-	typstr := typ.String()
-	if len(typstr) > 12 && typstr[:13] == "{ i8*, i64 }*" {
-		return "string" + typstr[13:]
+	if types.IsPointer(typ) {
+		if types.IsArray(typ.(*types.PointerType).ElemType) {
+			return "{" + strconv.Itoa(int(typ.(*types.PointerType).ElemType.(*types.ArrayType).Len)) + "|" + stroftype(typ.(*types.PointerType).ElemType.(*types.ArrayType).ElemType) + "}"
+		}
+		return stroftype(typ.(*types.PointerType).ElemType) + "*"
 	}
-	if len(typstr) > 2 && typstr[:3] == "i64" {
-		return "int" + typstr[3:]
+	if typ == strtype {
+		return "string"
 	}
-	if len(typstr) > 1 && typstr[:2] == "i1" {
-		return "bool" + typstr[2:]
+	if typ == types.I64 {
+		return "int"
 	}
-	return typstr
+	if typ == types.Float {
+		return "float"
+	}
+	if typ == types.I1 {
+		return "bool"
+	}
+	return "unknown"
 }
 func evalToLlvm(program []any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, main *ir.Func, indent int) {
 	for _, line := range program {
@@ -123,20 +130,16 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 	} else if item.Type().String()[0] == '[' {
 		val := parseStr("{", entry)
 
-		typ := item.Type().String()
-		split := strings.Fields(typ[1 : len(typ)-2])
-		len, _ := strconv.Atoi(split[0])
-
 		realType := item.Type().(*types.PointerType).ElemType
-
 		elemType := realType.(*types.ArrayType).ElemType
+		len := realType.(*types.ArrayType).Len
 
 		if len == 0 {
 			return parseStr("{}", entry)
 		}
 
 		zero := constant.NewInt(types.I32, 0)
-		for i := 0; i < len-1; i++ {
+		for i := uint64(0); i < len-1; i++ {
 			this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I32, int64(i)), zero)
 			val = strJoin(val, str(entry.NewLoad(elemType, this), entry, f), entry, f)
 			val = strJoin(val, parseStr(", ", entry), entry, f)
@@ -354,7 +357,11 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			gep := entry.NewGetElementPtr(strtype, arg, zero, zero)
 			entry.NewCall((*f)["print"], entry.NewLoad(types.I8Ptr, gep))
 		} else if name == "typeof" {
-			return parseStr(eval(args[0], v, f, m, entry, main, indent).Type().String(), entry)
+			if len(args) != 1 {
+				fmt.Println("Error: wrong argument count for 'typeof()'")
+				os.Exit(1)
+			}
+			return parseStr(stroftype(eval(args[0], v, f, m, entry, main, indent).Type()), entry)
 		} else if name == "str" {
 			if len(args) != 1 {
 				fmt.Println("Error: wrong argument count for str()")
@@ -489,6 +496,7 @@ func builtinFuncs(f *map[string]*ir.Func, m *ir.Module) {
 	(*f)["ftoa"] = m.NewFunc("ftoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.Float))
 	(*f)["strmalloc"] = m.NewFunc("malloc", types.I8Ptr, ir.NewParam("p1", types.I64))
 	(*f)["booltoint"] = m.NewFunc("booltoint", types.I64, ir.NewParam("p1", types.I1))
+	(*f)["stuff"] = m.NewFunc("stuff", types.Void, ir.NewParam("p1", types.NewArray(7, types.I64)))
 }
 func astToLlvm(program []any) string {
 	variables := make(map[string]vari)

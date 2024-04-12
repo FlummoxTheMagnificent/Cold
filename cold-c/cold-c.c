@@ -17,3 +17,6 @@ int floatlen(float value) {
 int booltoint(bool value) {
     return (int)value;
 }
+void stuff(int x[]) {
+	printf(x)
+}

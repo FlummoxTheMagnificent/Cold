@@ -394,6 +394,29 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 				entry.NewStore(current, gep)
 			}
 			return arr
+		} else if name == "idx" {
+			if len(args) > 2 {
+				fmt.Println("Error: unexpected", len(args)-1, "indices (expected 1)")
+				os.Exit(1)
+			}
+			if len(args) == 1 {
+				fmt.Println("Error: expected index")
+				os.Exit(1)
+			}
+			arr := eval(args[0], v, f, m, entry, main, indent)
+			if !(types.IsPointer(arr.Type()) && types.IsArray(arr.Type().(*types.PointerType).ElemType)) {
+				fmt.Println("Error: cannot find index from", stroftype(arr.Type()), "(can only find index from array)")
+				os.Exit(1)
+			}
+			index := eval(args[1], v, f, m, entry, main, indent)
+			if index.Type() != types.I64 {
+				fmt.Println("Error: cannot use value of type", stroftype(index.Type()), "to index into", args[0], "(expected int)")
+				os.Exit(1)
+			}
+			arrtyp := arr.Type().(*types.PointerType).ElemType
+			typ := arrtyp.(*types.ArrayType).ElemType
+			zero := constant.NewInt(types.I32, 0)
+			return entry.NewLoad(typ, entry.NewGetElementPtr(arrtyp, arr, index, zero))
 		} else if function, exists := (*f)[name]; exists {
 			list := make([]value.Value, len(args))
 			for i, item := range args {

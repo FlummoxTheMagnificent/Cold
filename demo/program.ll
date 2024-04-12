@@ -16,8 +16,6 @@ declare i8* @malloc(i64 %p1)
 
 declare i64 @booltoint(i1 %p1)
 
-declare void @stuff([7 x i64] %p1)
-
 define i32 @main() {
 0:
 	%1 = alloca [7 x i64]
@@ -475,5 +473,44 @@ define i32 @main() {
 	%365 = getelementptr { i8*, i64 }, { i8*, i64 }* %362, i32 0, i32 0
 	%366 = load i8*, i8** %365
 	call void @printf(i8* %366)
+	%367 = load [7 x i64]*, [7 x i64]** %9
+	%368 = getelementptr [7 x i64], [7 x i64]* %367, i64 8, i32 0
+	%369 = load i64, i64* %368
+	%370 = call i64 @intlen(i64 %369)
+	%371 = call i8* @malloc(i64 %370)
+	%372 = call i64 @itoa(i8* %371, i64 %369)
+	%373 = alloca { i8*, i64 }
+	%374 = getelementptr { i8*, i64 }, { i8*, i64 }* %373, i32 0, i32 0
+	store i8* %371, i8** %374
+	%375 = getelementptr { i8*, i64 }, { i8*, i64 }* %373, i32 0, i32 1
+	store i64 %370, i64* %375
+	%376 = alloca [2 x i8]
+	store [2 x i8] c"\0A\00", [2 x i8]* %376
+	%377 = alloca { i8*, i64 }
+	%378 = getelementptr [2 x i8], [2 x i8]* %376, i32 0, i32 0
+	%379 = getelementptr { i8*, i64 }, { i8*, i64 }* %377, i32 0, i32 0
+	store i8* %378, i8** %379
+	%380 = getelementptr { i8*, i64 }, { i8*, i64 }* %377, i32 0, i32 1
+	store i64 2, i64* %380
+	%381 = getelementptr { i8*, i64 }, { i8*, i64 }* %373, i32 0, i32 1
+	%382 = load i64, i64* %381
+	%383 = getelementptr { i8*, i64 }, { i8*, i64 }* %377, i32 0, i32 1
+	%384 = load i64, i64* %383
+	%385 = add i64 %382, %384
+	%386 = call i8* @malloc(i64 %385)
+	%387 = getelementptr { i8*, i64 }, { i8*, i64 }* %373, i32 0, i32 0
+	%388 = load i8*, i8** %387
+	%389 = call i8* @strcat(i8* %386, i8* %388)
+	%390 = getelementptr { i8*, i64 }, { i8*, i64 }* %377, i32 0, i32 0
+	%391 = load i8*, i8** %390
+	%392 = call i8* @strcat(i8* %386, i8* %391)
+	%393 = alloca { i8*, i64 }
+	%394 = getelementptr { i8*, i64 }, { i8*, i64 }* %393, i32 0, i32 0
+	store i8* %386, i8** %394
+	%395 = getelementptr { i8*, i64 }, { i8*, i64 }* %393, i32 0, i32 1
+	store i64 %385, i64* %395
+	%396 = getelementptr { i8*, i64 }, { i8*, i64 }* %393, i32 0, i32 0
+	%397 = load i8*, i8** %396
+	call void @printf(i8* %397)
 	ret i32 0
 }

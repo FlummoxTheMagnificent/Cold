@@ -1,3 +1,4 @@
 x := {1, 2, 3, 4, 5, 6, 7}
 println(x)
 println(typeof(x))
+println(x[0])

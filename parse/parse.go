@@ -71,7 +71,7 @@ func format(tokens []any) []any {
 		}
 		if typeof(i) == "int" || typeof(i) == "float64" || typeof(i) == "string" {
 			if !(isexpr || (output == nil && queue == nil)) {
-				fmt.Println("Error: unexpected", i)
+				fmt.Println("Error: unexpected", i, isexpr)
 				os.Exit(1)
 			}
 			if negate {
@@ -94,7 +94,7 @@ func format(tokens []any) []any {
 				werevalues[len(werevalues)-1] = true
 			}
 		} else if i.(lex.Token).Key == "," {
-			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "parse.Function" || queue[len(queue)-1].(lex.Token).Key != "(" && queue[len(queue)-1].(lex.Token).Key != "{") {
+			for len(queue) > 0 && (typeof(queue[len(queue)-1]) == "parse.Function" || queue[len(queue)-1].(lex.Token).Key != "(" && queue[len(queue)-1].(lex.Token).Key != "{" && queue[len(queue)-1].(lex.Token).Key != "[") {
 				output = append(output, queue[len(queue)-1])
 				queue = queue[:len(queue)-1]
 			}
@@ -109,14 +109,6 @@ func format(tokens []any) []any {
 			}
 		} else if i.(lex.Token).Key == "(" {
 			queue = append(queue, i)
-		} else if i.(lex.Token).Key == "{" {
-			queue = append(queue, Function{"arr", []any{}, 0})
-			queue = append(queue, i)
-			argcount = append(argcount, 0)
-			if len(werevalues) > 0 {
-				werevalues[len(werevalues)-1] = true
-			}
-			werevalues = append(werevalues, false)
 		} else if i.(lex.Token).Key == ")" {
 			if len(queue) == 0 {
 				fmt.Println("Error: missing (")
@@ -144,6 +136,14 @@ func format(tokens []any) []any {
 				argcount = argcount[:len(argcount)-1]
 				output = append(output, f)
 			}
+		} else if i.(lex.Token).Key == "{" {
+			queue = append(queue, Function{"arr", []any{}, 0})
+			queue = append(queue, i)
+			argcount = append(argcount, 0)
+			if len(werevalues) > 0 {
+				werevalues[len(werevalues)-1] = true
+			}
+			werevalues = append(werevalues, false)
 		} else if i.(lex.Token).Key == "}" {
 			if len(queue) == 0 {
 				fmt.Println(output)
@@ -168,6 +168,42 @@ func format(tokens []any) []any {
 			} else {
 				f.argcount = argcount[len(argcount)-1]
 			}
+			argcount = argcount[:len(argcount)-1]
+			output = append(output, f)
+		} else if i.(lex.Token).Key == "[" {
+			queue = append(queue, Function{"idx", []any{}, 0})
+			queue = append(queue, i)
+			argcount = append(argcount, 0)
+			if len(werevalues) > 0 {
+				werevalues[len(werevalues)-1] = true
+			}
+			werevalues = append(werevalues, false)
+			isexpr = true
+		} else if i.(lex.Token).Key == "]" {
+			if len(queue) == 0 {
+				fmt.Println(output)
+				fmt.Println("Error: missing [")
+				os.Exit(1)
+			}
+			for {
+				if typeof(queue[len(queue)-1]) == "lex.Token" && queue[len(queue)-1].(lex.Token).Key == "[" {
+					queue = queue[:len(queue)-1]
+					break
+				} else if len(queue) == 1 {
+					fmt.Println("Error: missing [")
+					os.Exit(1)
+				}
+				output = append(output, queue[len(queue)-1])
+				queue = queue[:len(queue)-1]
+			}
+			f := queue[len(queue)-1].(Function)
+			queue = queue[:len(queue)-1]
+			if werevalues[len(werevalues)-1] {
+				f.argcount = argcount[len(argcount)-1] + 1
+			} else {
+				f.argcount = argcount[len(argcount)-1]
+			}
+			f.argcount++
 			argcount = argcount[:len(argcount)-1]
 			output = append(output, f)
 		} else if i.(lex.Token).Key == "+" || i.(lex.Token).Key == "-" {

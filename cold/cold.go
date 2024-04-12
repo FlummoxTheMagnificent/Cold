@@ -496,7 +496,6 @@ func builtinFuncs(f *map[string]*ir.Func, m *ir.Module) {
 	(*f)["ftoa"] = m.NewFunc("ftoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.Float))
 	(*f)["strmalloc"] = m.NewFunc("malloc", types.I8Ptr, ir.NewParam("p1", types.I64))
 	(*f)["booltoint"] = m.NewFunc("booltoint", types.I64, ir.NewParam("p1", types.I1))
-	(*f)["stuff"] = m.NewFunc("stuff", types.Void, ir.NewParam("p1", types.NewArray(7, types.I64)))
 }
 func astToLlvm(program []any) string {
 	variables := make(map[string]vari)

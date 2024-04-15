@@ -68,10 +68,10 @@ func Lex(txt string) ([][]any, []int) {
 								txt = txt[len(match[1]):]
 							} else {
 								token := regexp.MustCompile(`^\w+`).FindStringSubmatch(txt)
-								if len(token[0]) > 0 {
-									fmt.Println("Lex error: unrecognized '" + token[0] + "'")
+								if len(token) > 0 {
+									fmt.Println("Error: unrecognized '" + token[0] + "'")
 								} else {
-									fmt.Println("Lex error: unrecognized '" + string(txt[0]) + "'")
+									fmt.Println("Error: unrecognized '" + string(txt[0]) + "'")
 								}
 								os.Exit(1)
 							}

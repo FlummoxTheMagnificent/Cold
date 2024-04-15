@@ -3,6 +3,7 @@ module github.com/FlummoxTheMagnificent/Cold/tree/main/cold
 go 1.22.1
 
 replace github.com/FlummoxTheMagnificent/Cold/tree/main/lex => ../lex
+
 replace github.com/FlummoxTheMagnificent/Cold/tree/main/parse => ../parse
 
 require (
@@ -16,4 +17,5 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	golang.org/x/mod v0.16.0 // indirect
 	golang.org/x/tools v0.19.0 // indirect
+	tinygo.org/x/go-llvm v0.0.0-20240106122909-c2c543540318 // indirect
 )

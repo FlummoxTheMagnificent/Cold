@@ -138,15 +138,15 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 		}
 
 		zero := constant.NewInt(types.I64, 0)
-		for i := uint64(0); i < len-1; i++ {
+		for i := uint64(0); i < len; i++ {
 			this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I64, int64(i)), zero)
 			val = strJoin(val, str(entry.NewLoad(elemType, this), entry, f), entry, f)
-			val = strJoin(val, parseStr(", ", entry), entry, f)
+			if i < len-1 {
+				val = strJoin(val, parseStr(", ", entry), entry, f)
+			} else {
+				val = strJoin(val, parseStr("}", entry), entry, f)
+			}
 		}
-		this := entry.NewGetElementPtr(realType, item, constant.NewInt(types.I64, int64(len-1)), zero)
-		val = strJoin(val, str(entry.NewLoad(elemType, this), entry, f), entry, f)
-		val = strJoin(val, parseStr("}", entry), entry, f)
-
 		return val
 	} else if types.IsVoid(item.Type()) {
 		return parseStr("void", entry)
@@ -155,9 +155,13 @@ func str(item value.Value, entry *ir.Block, f *map[string]*ir.Func) value.Value 
 	os.Exit(1)
 	return nil
 }
-func clean(v *map[string]vari, indent int) {
+func free(val value.Value, f *map[string]*ir.Func, entry *ir.Block) {
+	entry.NewCall((*f)["free"], entry.NewBitCast(val, types.I8Ptr))
+}
+func clean(v *map[string]vari, f *map[string]*ir.Func, entry *ir.Block, indent int) {
 	for key, item := range *v {
 		if item.scope > indent {
+			free(item.ptr, f, entry)
 			delete(*v, key)
 		}
 	}
@@ -453,7 +457,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			then := main.NewBlock("")
 			lastentry = then
 			evalToLlvm(code.Code[1:], v, f, m, main, indent+1)
-			clean(v, indent)
+			clean(v, f, then, indent)
 			new := main.NewBlock("")
 			lastentry.NewBr(new)
 			lastentry = new
@@ -466,13 +470,13 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			lastentry = then
 			new := main.NewBlock("")
 			evalToLlvm(code.Code[0].([]any)[1:], v, f, m, main, indent+1)
-			clean(v, indent)
+			clean(v, f, then, indent)
 			lastentry.NewBr(new)
 
 			els := main.NewBlock("")
 			lastentry = els
 			evalToLlvm(code.Code[1].([]any), v, f, m, main, indent+1)
-			clean(v, indent)
+			clean(v, f, els, indent)
 			lastentry.NewBr(new)
 			lastentry = new
 
@@ -483,7 +487,7 @@ func eval(expr any, v *map[string]vari, f *map[string]*ir.Func, m *ir.Module, en
 			loop := main.NewBlock("")
 			lastentry = loop
 			evalToLlvm(codeToLoop.Code[1:], v, f, m, main, indent+1)
-			clean(v, indent)
+			clean(v, f, loop, indent)
 			new := main.NewBlock("")
 			cond := eval(codeToLoop.Code[0], v, f, m, lastentry, main, indent)
 			lastentry.NewCondBr(cond, loop, new)
@@ -514,6 +518,7 @@ func builtinFuncs(f *map[string]*ir.Func, m *ir.Module) {
 	(*f)["ftoa"] = m.NewFunc("ftoa", types.I64, ir.NewParam("p1", types.I8Ptr), ir.NewParam("p2", types.Float))
 	(*f)["strmalloc"] = m.NewFunc("malloc", types.I8Ptr, ir.NewParam("p1", types.I64))
 	(*f)["booltoint"] = m.NewFunc("booltoint", types.I64, ir.NewParam("p1", types.I1))
+	(*f)["free"] = m.NewFunc("free", types.Void, ir.NewParam("p1", types.I8Ptr))
 }
 func astToLlvm(program []any) string {
 	variables := make(map[string]vari)
@@ -526,6 +531,7 @@ func astToLlvm(program []any) string {
 	for _, line := range program {
 		eval(line, &variables, &funcs, m, lastentry, main, 0)
 	}
+	clean(&variables, &funcs, lastentry, -1)
 	lastentry.NewRet(constant.NewInt(types.I32, 0))
 
 	return m.String()
@@ -536,7 +542,7 @@ func runLlvm(llvm string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
-	os.Remove("program.ll")
+	//os.Remove("program.ll")
 	cmd = exec.Command("clang", "program.o", "../cold-c/cold-c.o", "-oprogram", "-O3")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

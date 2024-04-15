@@ -30,8 +30,7 @@ while [condition]:
 ## Built-in Functions
 - `println()`: Prints the given text followed by a newline. Accepts any number of arguments, which are automatically joined.
 - `print()`: Works like `println()` but without the newline.
-- `typeof()`: Accepts one argument and returns the type of the given variable.
-- `str()`: Converts one item to a string
+- `typeof()`: Accepts one argument and returns the type of the given variable, as a string.
 
 # Example Programs
 ### Example FizzBuzz program:
